@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hourglass Simulation - Instanced Meshes</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; }
+        canvas { display: block; }
+        #controls { position: fixed; top: 10px; left: 10px; background: rgba(255, 255, 255, 0.8); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); max-width: 250px; }
+        #controls div { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+        #controls div:last-child { margin-bottom: 0; }
+        #controls label { margin-right: 10px; white-space: nowrap; }
+        #controls input[type="range"] { flex-grow: 1; margin: 0 5px; }
+        #controls span { min-width: 50px; text-align: right; font-family: monospace; }
+        #controls button { padding: 5px 10px; margin-right: 5px; cursor: pointer; }
+        #controls .button-group { justify-content: flex-start; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div class="button-group"> <button id="pauseButton">Pause</button> <button id="resetButton">Reset</button> </div>
+        <div> <label for="gravitySlider">Gravity:</label> <input type="range" id="gravitySlider" min="0.0000001" max="0.000001" step="0.00000005" value="0.0000001"> <span id="gravityValue">0.00000010</span> </div>
+    </div>
+    <div id="scene-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        let isPaused = false, gravity = 1e-7, currentNumParticles = 1e4;
+        const sceneContainer = document.getElementById('scene-container'),
+              width = window.innerWidth,
+              height = window.innerHeight,
+              scene = new THREE.Scene(),
+              camera = new THREE.PerspectiveCamera(75, width / height, 0.01, 1000),
+              renderer = new THREE.WebGLRenderer({ antialias: true });
+
+        scene.background = new THREE.Color(0xf5f5f5);
+        camera.position.set(0, 2, 6);
+        renderer.setSize(width, height);
+        sceneContainer.appendChild(renderer.domElement);
+        renderer.shadowMap.enabled = true;
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 8, 6);
+        directionalLight.castShadow = true;
+        Object.assign(directionalLight.shadow.mapSize, { width: 1024, height: 1024 });
+        Object.assign(directionalLight.shadow.camera, { near: 0.5, far: 20 });
+        scene.add(directionalLight);
+
+        const glassMaterial = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, transmission: 0.95, ior: 1.5, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.7 });
+        const sandColor = new THREE.Color(0xC2B280);
+
+        const bulbRadius = 1, neckHeight = 0.5, neckRadius = 0.015, bulbCenterTopY = 1.2, bulbCenterBottomY = -1.2;
+        const topBulb = new THREE.Mesh(new THREE.SphereGeometry(bulbRadius, 64, 32), glassMaterial);
+        topBulb.position.y = bulbCenterTopY; topBulb.castShadow = false; topBulb.receiveShadow = true;
+        const bottomBulb = new THREE.Mesh(new THREE.SphereGeometry(bulbRadius, 64, 32), glassMaterial);
+        bottomBulb.position.y = bulbCenterBottomY; bottomBulb.castShadow = false; bottomBulb.receiveShadow = true;
+        const connectingNeck = new THREE.Mesh(new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32, 1, true), glassMaterial);
+        connectingNeck.position.y = 0; connectingNeck.castShadow = false; connectingNeck.receiveShadow = true;
+        const frameTopY = bulbCenterTopY + bulbRadius + 0.15, frameBottomY = bulbCenterBottomY - bulbRadius - 0.15;
+        const topFrame = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.3, 32), woodMaterial);
+        topFrame.position.y = frameTopY; topFrame.castShadow = true; topFrame.receiveShadow = true;
+        const bottomFrame = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.3, 32), woodMaterial);
+        bottomFrame.position.y = frameBottomY; bottomFrame.castShadow = true; bottomFrame.receiveShadow = true;
+        const supportHeight = frameTopY - frameBottomY;
+        const supportGeometry = new THREE.CylinderGeometry(0.1, 0.1, supportHeight, 16);
+        const supports = Array.from({ length: 4 }, (_, i) => {
+            const support = new THREE.Mesh(supportGeometry, woodMaterial);
+            const angle = i * Math.PI / 2;
+            support.position.set(Math.cos(angle) * 1.2, (frameTopY + frameBottomY) / 2, Math.sin(angle) * 1.2);
+            support.castShadow = true; support.receiveShadow = true;
+            return support;
+        });
+        scene.add(topBulb, bottomBulb, connectingNeck, topFrame, bottomFrame, ...supports);
+
+        const heightMapResolution = 32, heightMapWorldSize = bulbRadius * 2.1, halfMapSize = heightMapWorldSize / 2, cellSize = heightMapWorldSize / heightMapResolution;
+        const heightMap = Array.from({ length: heightMapResolution }, () => Array(heightMapResolution).fill(bulbCenterBottomY - bulbRadius));
+        const getGridIndices = (x, z) => {
+            const mapX = x + halfMapSize, mapZ = z + halfMapSize;
+            const ix = Math.floor(mapX / cellSize), iz = Math.floor(mapZ / cellSize);
+            return { ix: Math.max(0, Math.min(heightMapResolution - 1, ix)), iz: Math.max(0, Math.min(heightMapResolution - 1, iz)) };
+        };
+
+        let sandInstancedMesh, sphereGeometry, sphereMaterial, velocities = new Float32Array(0);
+        const tempMatrix = new THREE.Matrix4();
+
+        const setupSimulation = (particleCount) => {
+            currentNumParticles = particleCount;
+            if (sandInstancedMesh) {
+                scene.remove(sandInstancedMesh);
+                sphereGeometry?.dispose();
+                sphereMaterial?.dispose();
+            }
+            const particleRadius = 0.012;
+            sphereGeometry = new THREE.SphereGeometry(particleRadius, 5, 3);
+            sphereMaterial = new THREE.MeshStandardMaterial({ color: sandColor, roughness: 0.8, metalness: 0.1 });
+            velocities = new Float32Array(currentNumParticles * 3);
+            sandInstancedMesh = new THREE.InstancedMesh(sphereGeometry, sphereMaterial, currentNumParticles);
+            sandInstancedMesh.castShadow = true; sandInstancedMesh.receiveShadow = true;
+
+            for (let i = 0; i < currentNumParticles; i++) {
+                const r = bulbRadius * Math.cbrt(Math.random()) * 0.98;
+                const phi = Math.acos(-Math.random()), theta = Math.random() * 2 * Math.PI;
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                let y = bulbCenterTopY + r * Math.cos(phi);
+                const z = r * Math.sin(phi) * Math.sin(theta);
+                if (y < neckHeight / 2 + particleRadius && x * x + z * z < neckRadius * neckRadius * 4) {
+                    y = neckHeight / 2 + particleRadius + Math.random() * 0.01;
+                }
+                tempMatrix.setPosition(x, y, z);
+                sandInstancedMesh.setMatrixAt(i, tempMatrix);
+                velocities.fill(0, i * 3, i * 3 + 3);
+            }
+            sandInstancedMesh.instanceMatrix.needsUpdate = true;
+            scene.add(sandInstancedMesh);
+        };
+
+        const resetSimulation = () => {
+            isPaused = true; pauseButton.textContent = 'Play';
+            heightMap.forEach(row => row.fill(bulbCenterBottomY - bulbRadius));
+            setupSimulation(currentNumParticles);
+            console.log(`Simulation reset with ${currentNumParticles} particles.`);
+        };
+
+        const pauseButton = document.getElementById('pauseButton'),
+              resetButton = document.getElementById('resetButton'),
+              gravitySlider = document.getElementById('gravitySlider'),
+              gravityValueSpan = document.getElementById('gravityValue');
+
+        pauseButton.addEventListener('click', () => pauseButton.textContent = (isPaused = !isPaused) ? 'Play' : 'Pause');
+        resetButton.addEventListener('click', resetSimulation);
+        gravitySlider.addEventListener('input', () => gravityValueSpan.textContent = (gravity = parseFloat(gravitySlider.value)).toFixed(8));
+
+        gravityValueSpan.textContent = gravity.toFixed(8);
+        gravitySlider.value = gravity;
+
+        const animate = () => {
+            requestAnimationFrame(animate);
+            if (isPaused) { controls.update(); return; }
+            controls.update();
+
+            const particleCheckRadius = sphereGeometry.parameters.radius;
+            let matrixNeedsUpdate = false;
+
+            for (let i = 0; i < currentNumParticles; i++) {
+                const index = i * 3;
+                sandInstancedMesh.getMatrixAt(i, tempMatrix);
+                let [currentX, currentY, currentZ] = [tempMatrix.elements[12], tempMatrix.elements[13], tempMatrix.elements[14]];
+                const isSettled = velocities.slice(index, index + 3).every(v => Math.abs(v) < 1e-5);
+
+                if (!isSettled || currentY > neckHeight / 2) velocities[index + 1] -= gravity;
+
+                let [nextX, nextY, nextZ] = [currentX + velocities[index], currentY + velocities[index + 1], currentZ + velocities[index + 2]];
+
+                if (nextY > neckHeight / 2) {
+                    const distSq = nextX ** 2 + nextZ ** 2 + (nextY - bulbCenterTopY) ** 2;
+                    if (nextY < bulbCenterTopY - neckHeight * 0.1 && distSq < bulbRadius ** 2 * 0.8) {}
+                    if (distSq > bulbRadius ** 2 * 0.98) {
+                        const vec = new THREE.Vector3(nextX, nextY - bulbCenterTopY, nextZ).normalize().multiplyScalar(-0.01);
+                        [nextX, nextY, nextZ] = [nextX + vec.x, nextY + vec.y, nextZ + vec.z];
+                        velocities[index + 1] *= 0.5;
+                    }
+                } else if (nextY > -neckHeight / 2) {
+                    const hDistSq = nextX ** 2 + nextZ ** 2;
+                    if (hDistSq > neckRadius ** 2) {
+                        const angle = Math.atan2(nextZ, nextX), R = neckRadius * 0.95;
+                        [nextX, nextZ] = [Math.cos(angle) * R, Math.sin(angle) * R];
+                        velocities[index] *= 0.1; velocities[index + 2] *= 0.1;
+                    }
+                    velocities[index + 1] -= 1e-4;
+                } else {
+                    let collision = false;
+                    const distSq = nextX ** 2 + nextZ ** 2 + (nextY - bulbCenterBottomY) ** 2;
+                    if (distSq > bulbRadius ** 2 * 0.999) { // Changed 0.98 to 0.999
+                        const vec = new THREE.Vector3(nextX, nextY - bulbCenterBottomY, nextZ).normalize().multiplyScalar(-0.01);
+                        [nextX, nextY, nextZ] = [nextX + vec.x, nextY + vec.y, nextZ + vec.z];
+                        [velocities[index + 1], velocities[index], velocities[index + 2]] = [velocities[index + 1] * 0.1, velocities[index] * 0.7, velocities[index + 2] * 0.7];
+                        collision = true;
+                    } else if (velocities[index + 1] < 0) {
+                        const { ix, iz } = getGridIndices(nextX, nextZ);
+                        const pileH = heightMap[ix][iz];
+                        if (nextY <= pileH + particleCheckRadius * 0.2) {
+                            collision = true;
+                            let settled = true, minNH = pileH, slideIx = -1, slideIz = -1;
+                            const neighbors = [{ dx: -1, dz: 0 }, { dx: 1, dz: 0 }, { dx: 0, dz: -1 }, { dx: 0, dz: 1 }];
+                            const stabThresh = cellSize * 0.6;
+                            for (const { dx, dz } of neighbors) {
+                                const [nix, niz] = [ix + dx, iz + dz];
+                                if (nix >= 0 && nix < heightMapResolution && niz >= 0 && niz < heightMapResolution) {
+                                    const nH = heightMap[nix][niz];
+                                    if (pileH > nH + stabThresh) {
+                                        settled = false;
+                                        if (nH < minNH) { minNH = nH; slideIx = nix; slideIz = niz; }
+                                    }
+                                }
+                            }
+                            if (settled) { [nextY, velocities[index], velocities[index + 1], velocities[index + 2]] = [pileH + particleCheckRadius * 0.1, 0, 0, 0]; heightMap[ix][iz] = pileH + particleCheckRadius * 0.3; }
+                            else if (slideIx !== -1) {
+                                const tX = (slideIx + 0.5) * cellSize - halfMapSize;
+                                const tZ = (slideIz + 0.5) * cellSize - halfMapSize;
+                                const [sDX, sDZ] = [tX - nextX, tZ - nextZ];
+                                const sS = 0.03, sD = Math.sqrt(sDX ** 2 + sDZ ** 2);
+                                if (sD > 1e-4) {
+                                    const invD = 1 / sD;
+                                    velocities[index] += sDX * invD * sS;
+                                    velocities[index + 2] += sDZ * invD * sS;
+                                }
+                                [velocities[index + 1], nextY] = [velocities[index + 1] * 0.2, pileH + particleCheckRadius * 1.1];
+                            } else { [nextY, velocities[index], velocities[index + 1], velocities[index + 2]] = [pileH + particleCheckRadius * 0.1, 0, 0, 0]; heightMap[ix][iz] = pileH + particleCheckRadius * 0.3; }
+                        }
+                    }
+                    if (!collision && velocities[index + 1] < 0 && currentY < -neckHeight) {}
+                }
+
+                if (!isSettled && Math.abs(velocities[index + 1]) < 1e-5 && Math.abs(velocities[index]) < 1e-5 && Math.abs(velocities[index + 2]) < 1e-5) {
+                    velocities.fill(0, index, index + 3);
+                }
+
+                if (Math.abs(nextX - currentX) > 1e-6 || Math.abs(nextY - currentY) > 1e-6 || Math.abs(nextZ - currentZ) > 1e-6) {
+                    tempMatrix.setPosition(nextX, nextY, nextZ);
+                    sandInstancedMesh.setMatrixAt(i, tempMatrix);
+                    matrixNeedsUpdate = true;
+                }
+            }
+
+            if (matrixNeedsUpdate) sandInstancedMesh.instanceMatrix.needsUpdate = true;
+            renderer.render(scene, camera);
+        };
+
+        setupSimulation(currentNumParticles);
+        resetSimulation();
+        isPaused = false;
+        pauseButton.textContent = 'Pause';
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

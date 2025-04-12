@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Optimized Procedural Voxel Landscape (GPU Accelerated Simulation)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gpu.js@latest/dist/gpu.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<script>
+// --- Constants ---
+const EMPTY = 0;
+const SAND = 1;
+const WATER = 2;
+const STONE = 3;
+
+const W = 10; // Voxel size
+const GRAVITY = -0.1;
+const LANDSCAPE_SCALE = 0.05;
+const TERRAIN_HEIGHT_SCALE = 50;
+const WATER_SOURCE_HEIGHT = 10;
+const WATER_SOURCE_RADIUS = 5;
+const MOVE_SPEED = 10;
+const ROTATE_SPEED = 0.01;
+
+// --- Simulation State ---
+let cols, numRows, depth;
+let grid, velocityGrid;
+let gridCenterX, gridCenterY, gridCenterZ;
+
+// --- Camera & Interaction State ---
+let isDragging = false;
+let previousMouseX, previousMouseY;
+let rotationX, rotationY;
+let isShiftPressed = false;
+let cameraX = 0, cameraY = 0, cameraZ = 500;
+
+// --- GPU Setup ---
+const gpu = new GPU();
+
+// --- Helper Functions ---
+function make3DArray(cols, rows, dep) {
+    let arr = new Array(cols);
+    for (let i = 0; i < cols; i++) {
+        arr[i] = new Array(rows);
+        for (let j = 0; j < rows; j++) {
+            arr[i][j] = new Array(dep).fill(EMPTY);
+        }
+    }
+    return arr;
+}
+
+function make3DFloatArray(cols, rows, dep) {
+    let arr = new Array(cols);
+    for (let i = 0; i < cols; i++) {
+        arr[i] = new Array(rows);
+        for (let j = 0; j < rows; j++) {
+            arr[i][j] = new Array(dep).fill(0.0);
+        }
+    }
+    return arr;
+}
+
+function withinBounds(x, y, z) {
+    return x >= 0 && x < cols && y >= 0 && y < numRows && z >= 0 && z < depth;
+}
+
+function isSurfaceVoxel(x, y, z) {
+    if (grid[x]?.[y + 1]?.[z] === EMPTY || !withinBounds(x, y + 1, z)) return true;
+    if (grid[x]?.[y - 1]?.[z] === EMPTY || !withinBounds(x, y - 1, z)) return true;
+    if (grid[x + 1]?.[y]?.[z] === EMPTY || !withinBounds(x + 1, y, z)) return true;
+    if (grid[x - 1]?.[y]?.[z] === EMPTY || !withinBounds(x - 1, y, z)) return true;
+    if (grid[x]?.[y]?.[z + 1] === EMPTY || !withinBounds(x, y, z + 1)) return true;
+    if (grid[x]?.[y]?.[z - 1] === EMPTY || !withinBounds(x, y, z - 1)) return true;
+    return false;
+}
+
+// --- GPU Kernels ---
+
+// Kernel to apply gravity and basic movement (simplified for GPU)
+const simulateKernel = gpu.createKernel(function(currentGrid, velocityGrid, cols, numRows, depth, gravity) {
+    const x = this.thread.x;
+    const y = this.thread.y;
+    const z = this.thread.z;
+
+    if (currentGrid[x][y][z] === 0) { // EMPTY
+        return 0;
+    }
+    if (currentGrid[x][y][z] === 3) { // STONE
+        return 3;
+    }
+
+    let newY = Math.floor(y - velocityGrid[x][y][z] - gravity);
+    if (newY < 0) newY = 0;
+    if (newY >= numRows) newY = numRows - 1;
+
+    if (currentGrid[x][newY][z] === 0) {
+        return currentGrid[x][y][z];
+    } else {
+        return currentGrid[x][y][z]; // For now, no complex collision
+    }
+}, {
+    dimensions: [cols, numRows, depth],
+    outputTexture: true // Output as a texture for potential further GPU processing
+});
+
+// Kernel to update velocity (simplified)
+const updateVelocityKernel = gpu.createKernel(function(velocityGrid, gravity) {
+    const x = this.thread.x;
+    const y = this.thread.y;
+    const z = this.thread.z;
+
+    if (this.fromTexture(velocityGrid)[x][y][z] !== 0) {
+        return this.fromTexture(velocityGrid)[x][y][z] + gravity;
+    }
+    return 0;
+}, {
+    dimensions: [cols, numRows, depth],
+    outputTexture: true
+});
+
+
+// --- Initialization ---
+function setup() {
+    createCanvas(windowWidth, windowHeight, WEBGL);
+    colorMode(HSB, 360, 255, 255);
+    noiseDetail(8, 0.5);
+
+    rotationX = -PI / 6;
+    rotationY = PI / 6;
+
+    initGrids();
+    calculateCenterOffsets();
+    generateLandscape();
+    createWaterSource();
+}
+
+function initGrids() {
+    cols = floor(windowWidth / W);
+    numRows = floor(windowHeight / W);
+    depth = 50;
+
+    grid = make3DArray(cols, numRows, depth);
+    velocityGrid = make3DFloatArray(cols, numRows, depth);
+}
+
+function calculateCenterOffsets() {
+    gridCenterX = cols * W / 2;
+    gridCenterY = numRows * W / 2;
+    gridCenterZ = depth * W / 2;
+}
+
+function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+    initGrids();
+    calculateCenterOffsets();
+    generateLandscape();
+    createWaterSource();
+    console.log("Window resized, simulation reset.");
+}
+
+function generateLandscape() {
+    for (let i = 0; i < cols; i++) {
+        for (let k = 0; k < depth; k++) {
+            let noiseVal = noise(i * LANDSCAPE_SCALE, k * LANDSCAPE_SCALE);
+            let terrainHeight = floor(noiseVal * numRows * 0.5) + floor(numRows * 0.1);
+            terrainHeight = min(terrainHeight, numRows);
+
+            for (let j = 0; j < terrainHeight; j++) {
+                if(j < numRows) {
+                    grid[i][j][k] = (j < terrainHeight - 3) ? STONE : SAND;
+                }
+            }
+        }
+    }
+}
+
+function createWaterSource() {
+    let sourceX = floor(cols / 4);
+    let sourceZ = floor(depth / 4);
+    let sourceY = max(0, numRows - WATER_SOURCE_HEIGHT - 10);
+
+    for (let i = -WATER_SOURCE_RADIUS; i <= WATER_SOURCE_RADIUS; i++) {
+        for (let k = -WATER_SOURCE_RADIUS; k <= WATER_SOURCE_RADIUS; k++) {
+            for (let j = 0; j < WATER_SOURCE_HEIGHT; j++) {
+                let x = sourceX + i;
+                let z = sourceZ + k;
+                let y = sourceY + j;
+                if (dist(i, k, 0, 0) <= WATER_SOURCE_RADIUS) {
+                    if (withinBounds(x, y, z)) {
+                        if(grid[x][y][z] === EMPTY) {
+                            grid[x][y][z] = WATER;
+                            velocityGrid[x][y][z] = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function keyPressed() {
+    if (keyCode === SHIFT) isShiftPressed = true;
+}
+
+function keyReleased() {
+    if (keyCode === SHIFT) isShiftPressed = false;
+}
+
+function mousePressed() {
+    if (isShiftPressed) {
+        isDragging = true;
+        previousMouseX = mouseX;
+        previousMouseY = mouseY;
+    }
+}
+
+function mouseReleased() {
+    isDragging = false;
+}
+
+function mouseDragged() {
+    if (isDragging) {
+        let dx = mouseX - previousMouseX;
+        let dy = mouseY - previousMouseY;
+        rotationY += dx * ROTATE_SPEED;
+        rotationX += dy * ROTATE_SPEED;
+        rotationX = constrain(rotationX, -PI / 2 + 0.01, PI / 2 - 0.01);
+        previousMouseX = mouseX;
+        previousMouseY = mouseY;
+    } else {
+        let midDepth = floor(depth / 2);
+        let extent = 2;
+        let centerX = floor(cols/2);
+        let centerY = floor(numRows/2);
+
+        for (let i = -extent; i <= extent; i++) {
+            for (let j = -extent; j <= extent; j++) {
+                for (let k = -extent; k <= extent; k++) {
+                    if (random(1) < 0.5) {
+                        let x = centerX + i;
+                        let y = centerY + j;
+                        let z = midDepth + k;
+                        if (withinBounds(x, y, z) && grid[x][y][z] !== STONE) {
+                            grid[x][y][z] = SAND;
+                            velocityGrid[x][y][z] = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function mouseWheel(event) {
+    cameraZ += event.delta / 5;
+    cameraZ = max(cameraZ, W * 5);
+    cameraZ = min(cameraZ, W * max(cols, numRows, depth) * 3);
+    return false;
+}
+
+// --- Main Loop ---
+function draw() {
+    background(50, 150, 255);
+
+    camera(cameraX, cameraY, cameraZ, 0, 0, 0, 0, -1, 0);
+    rotateX(rotationX);
+    rotateY(rotationY);
+
+    noStroke();
+    for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < numRows; j++) {
+            for (let k = 0; k < depth; k++) {
+                const voxelType = grid[i][j][k];
+
+                if (voxelType !== EMPTY && isSurfaceVoxel(i, j, k)) {
+                    push();
+                    translate(i * W - gridCenterX, j * W - gridCenterY, k * W - gridCenterZ);
+                    if (voxelType === SAND) {
+                        fill(45, 200, 200);
+                    } else if (voxelType === WATER) {
+                        fill(200, 220, 255, 200);
+                    } else if (voxelType === STONE) {
+                        fill(0, 0, 100);
+                    }
+                    box(W);
+                    pop();
+                }
+            }
+        }
+    }
+
+    // --- GPU Based Simulation Update ---
+    // Convert grid and velocityGrid to textures
+    const gridTexture = gpu.createTexture({ size: [cols, numRows, depth], format: 'rgba' });
+    const velocityTexture = gpu.createTexture({ size: [cols, numRows, depth], format: 'rgba' });
+
+    for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < numRows; j++) {
+            for (let k = 0; k < depth; k++) {
+                gridTexture.setPixel(i, j, k, [grid[i][j][k], 0, 0, 0]);
+                velocityTexture.setPixel(i, j, k, [velocityGrid[i][j][k], 0, 0, 0]);
+            }
+        }
+    }
+
+    // Run the simulation kernel
+    const nextGridTexture = simulateKernel(gridTexture, velocityTexture, cols, numRows, depth, GRAVITY);
+
+    // Run the velocity update kernel
+    const nextVelocityTexture = updateVelocityKernel(velocityTexture, GRAVITY);
+
+    // Get the data back from the GPU (can be a performance bottleneck)
+    const nextGridData = nextGridTexture.toArray();
+    const nextVelocityData = nextVelocityTexture.toArray();
+
+    // Update the grid and velocityGrid with the GPU results
+    for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < numRows; j++) {
+            for (let k = 0; k < depth; k++) {
+                grid[i][j][k] = Math.round(nextGridData[i][j][k][0]);
+                velocityGrid[i][j][k] = nextVelocityData[i][j][k][0];
+            }
+        }
+    }
+}
+</script>
+</body>
+</html>

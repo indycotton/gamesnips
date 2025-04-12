@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Falling Sand (3D - Optimized)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    let isDragging = false;
+    let previousMouseX, previousMouseY;
+    let rotationX, rotationY;
+    let isShiftPressed = false;
+
+    function make3DArray(cols, numRows, depth) {
+      let arr = new Array(cols);
+      for (let i = 0; i < cols; i++) {
+        arr[i] = new Array(numRows);
+        for (let j = 0; j < numRows; j++) {
+          arr[i][j] = new Array(depth).fill(0);
+        }
+      }
+      return arr;
+    }
+
+    let gridA, gridB, velA, velB;
+    let grid, velocityGrid;
+
+    let w = 10;
+    let cols, numRows, depth;
+    let hueValue = 200;
+    let gravity = 0.1;
+
+    let cameraX = 0;
+    let cameraY = 0;
+    let cameraZ = 500;
+    let moveSpeed = 10;
+    let rotateSpeed = 0.01;
+
+    function withinBounds(x, y, z) {
+      return x >= 0 && x < cols && y >= 0 && y < numRows && z >= 0 && z < depth;
+    }
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight, WEBGL);
+      colorMode(HSB, 360, 255, 255);
+      cols = floor(width / w);
+      numRows = floor(height / w);
+      depth = 30;
+
+      gridA = make3DArray(cols, numRows, depth);
+      gridB = make3DArray(cols, numRows, depth);
+      velA = make3DArray(cols, numRows, depth);
+      velB = make3DArray(cols, numRows, depth);
+
+      grid = gridA;
+      velocityGrid = velA;
+
+      rotationX = -PI / 4;
+      rotationY = PI / 4;
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      cols = floor(width / w);
+      numRows = floor(height / w);
+      gridA = make3DArray(cols, numRows, depth);
+      gridB = make3DArray(cols, numRows, depth);
+      velA = make3DArray(cols, numRows, depth);
+      velB = make3DArray(cols, numRows, depth);
+      grid = gridA;
+      velocityGrid = velA;
+    }
+
+    function keyPressed() {
+      if (keyCode === SHIFT) {
+        isShiftPressed = true;
+      } else if (keyCode === UP_ARROW || key === 'w') {
+        cameraZ -= moveSpeed * cos(rotationY);
+        cameraX += moveSpeed * sin(rotationY);
+        cameraY += moveSpeed * sin(rotationX);
+      } else if (keyCode === DOWN_ARROW || key === 's') {
+        cameraZ += moveSpeed * cos(rotationY);
+        cameraX -= moveSpeed * sin(rotationY);
+        cameraY -= moveSpeed * sin(rotationX);
+      } else if (keyCode === LEFT_ARROW || key === 'a') {
+        cameraX -= moveSpeed * cos(rotationY);
+        cameraZ -= moveSpeed * sin(rotationY);
+      } else if (keyCode === RIGHT_ARROW || key === 'd') {
+        cameraX += moveSpeed * cos(rotationY);
+        cameraZ += moveSpeed * sin(rotationY);
+      } else if (key === 'q') {
+        cameraY -= moveSpeed;
+      } else if (key === 'e') {
+        cameraY += moveSpeed;
+      }
+    }
+
+    function keyReleased() {
+      if (keyCode === SHIFT) {
+        isShiftPressed = false;
+      }
+    }
+
+    function mousePressed() {
+      if (isShiftPressed) {
+        isDragging = true;
+        previousMouseX = mouseX;
+        previousMouseY = mouseY;
+      }
+    }
+
+    function mouseReleased() {
+      isDragging = false;
+    }
+
+    function mouseDragged() {
+      if (isDragging) {
+        let deltaX = mouseX - previousMouseX;
+        let deltaY = mouseY - previousMouseY;
+        rotationY += deltaX * rotateSpeed;
+        rotationX += deltaY * rotateSpeed;
+        previousMouseX = mouseX;
+        previousMouseY = mouseY;
+      } else {
+        let mouseCol = floor(mouseX / w);
+        let mouseRow = floor(mouseY / w);
+        let middleDepth = floor(depth / 2);
+        let matrix = 3;
+        let extent = floor(matrix / 2);
+        for (let i = -extent; i <= extent; i++) {
+          for (let j = -extent; j <= extent; j++) {
+            for (let k = -extent; k <= extent; k++) {
+              if (random(1) < 0.75) {
+                let col = mouseCol + i;
+                let row = mouseRow + j;
+                let dep = middleDepth + k;
+                if (withinBounds(col, row, dep)) {
+                  grid[col][row][dep] = hueValue;
+                  velocityGrid[col][row][dep] = 1;
+                }
+              }
+            }
+          }
+        }
+        hueValue += 0.5;
+        if (hueValue > 360) {
+          hueValue = 1;
+        }
+      }
+    }
+
+    function draw() {
+      background(0);
+      camera(cameraX, cameraY, cameraZ, 0, 0, 0, 0, 1, 0);
+      rotateX(rotationX);
+      rotateY(rotationY);
+
+      // Draw sand
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < numRows; j++) {
+          for (let k = 0; k < depth; k++) {
+            if (grid[i][j][k] > 0) {
+              push();
+              translate(i * w - cols * w / 2, j * w - numRows * w / 2, k * w - depth * w / 2);
+              fill(grid[i][j][k], 255, 255);
+              noStroke();
+              box(w);
+              pop();
+            }
+          }
+        }
+      }
+
+      let nextGrid = (grid === gridA ? gridB : gridA);
+      let nextVel = (velocityGrid === velA ? velB : velA);
+
+      // Clear next buffer
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < numRows; j++) {
+          for (let k = 0; k < depth; k++) {
+            nextGrid[i][j][k] = 0;
+            nextVel[i][j][k] = 0;
+          }
+        }
+      }
+
+      for (let i = 0; i < cols; i++) {
+        for (let j = numRows - 1; j >= 0; j--) {
+          for (let k = 0; k < depth; k++) {
+            let state = grid[i][j][k];
+            let velocity = velocityGrid[i][j][k];
+
+            if (state > 0) {
+              let nextY = j + 1;
+              let moved = false;
+
+              if (withinBounds(i, nextY, k) && grid[i][nextY][k] === 0) {
+                nextGrid[i][nextY][k] = state;
+                nextVel[i][nextY][k] = velocity + gravity;
+                moved = true;
+              } else {
+                let potentialMoves = [];
+                if (withinBounds(i + 1, nextY, k) && grid[i + 1][nextY][k] === 0) potentialMoves.push({ x: i + 1, y: nextY, z: k });
+                if (withinBounds(i - 1, nextY, k) && grid[i - 1][nextY][k] === 0) potentialMoves.push({ x: i - 1, y: nextY, z: k });
+                if (withinBounds(i, nextY, k + 1) && grid[i][nextY][k + 1] === 0) potentialMoves.push({ x: i, y: nextY, z: k + 1 });
+                if (withinBounds(i, nextY, k - 1) && grid[i][nextY][k - 1] === 0) potentialMoves.push({ x: i, y: nextY, z: k - 1 });
+
+                if (potentialMoves.length > 0) {
+                  let move = random(potentialMoves);
+                  nextGrid[move.x][move.y][move.z] = state;
+                  nextVel[move.x][move.y][move.z] = velocity + gravity;
+                  moved = true;
+                }
+              }
+
+              if (!moved) {
+                nextGrid[i][j][k] = state;
+                nextVel[i][j][k] = velocity + gravity;
+              }
+            }
+          }
+        }
+      }
+
+      grid = nextGrid;
+      velocityGrid = nextVel;
+    }
+  </script>
+</body>
+</html>

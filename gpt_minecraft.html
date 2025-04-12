@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Minecraft - World Orbit Camera</title>
+    <style>
+        /* CSS styles remain the same */
+        html, body {
+            margin: 0;
+            overflow: hidden;
+            height: 100%;
+            background-color: #A9CCE3; /* Sky color */
+        }
+
+        canvas {
+            display: block;
+            cursor: grab;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        #uiContainer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 110;
+            display: flex; /* Use flexbox for layout */
+            flex-direction: column; /* Stack items vertically */
+            align-items: flex-start; /* Align items to the start */
+        }
+
+        #instructions, #controlsContainer {
+            background-color: rgba(0, 0, 0, 0.6); /* Slightly darker for better contrast */
+            border: 1px solid #555;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            color: white;
+            font-family: sans-serif;
+        }
+
+        #controlsContainer {
+             background-color: rgba(255, 255, 255, 0.7);
+             color: black; /* Black text for light background */
+        }
+
+        #instructions h3 {
+            margin-top: 0;
+            font-size: 14px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+        }
+
+        #instructions p {
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        #controlsContainer label {
+            margin-right: 5px;
+            font-weight: bold;
+        }
+         #controlsContainer input[type="number"] {
+            width: 50px;
+            padding: 5px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        #controlsContainer button {
+            padding: 8px 12px;
+            margin-left: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s ease; /* Smooth transition */
+        }
+
+        #controlsContainer button:hover {
+            background-color: #45a049;
+        }
+        #resetCameraButton { /* Specific styling if needed */
+             background-color: #007bff;
+        }
+         #resetCameraButton:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.139.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.139.0/examples/jsm/",
+                "simplex-noise": "https://esm.sh/simplex-noise@4"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="uiContainer">
+        <div id="instructions">
+            <h3>Controls:</h3>
+            <p>W, A, S, D: Move Player</p>
+            <p>Space: Move Player Up</p>
+            <p>Left Shift: Move Player Down</p>
+            <p>Mouse Drag: Rotate Camera Orbit</p>
+            <p>Scroll Wheel: Zoom Camera</p>
+            <p>Double Left Click: Place Block</p>
+            <p>Ctrl + Double Left Click: Remove Block</p>
+            <p>Alt + Double Left Click: Drop Block</p>
+        </div>
+        <div id="controlsContainer">
+             <label for="worldSizeInput">Size:</label>
+             <input type="number" id="worldSizeInput" value="30" min="10" max="200">
+             <button id="generateButton">Generate</button>
+             <button id="resetCameraButton">Reset Camera</button>
+        </div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+<script type="module">
+    import * as THREE from 'three';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+    import { createNoise2D } from 'simplex-noise';
+
+    // --- Constants ---
+    const BS = 0.1; // Block Size
+    const FOV = 75;
+    const NEAR = 0.01;
+    const FAR = 1000;
+    const FREQ = 0.05; // Noise Frequency
+    const AMP = 15;    // Noise Amplitude (Max Height)
+    const PL_H = 1.8 * BS; // Player Height
+    const PL_R = 0.4 * BS; // Player Radius
+    const MOVE_VEL = 0.05; // Movement Velocity
+    const MOUSE_SENS = 0.002;
+    const DC_THRESH = 300; // Double Click Threshold (ms)
+    const GRAV = -0.015; // Gravity for particles
+    const FALL_SPEED = 0.08; // Block Fall Speed multiplier
+    const DROP_H_BLOCKS = 5; // Height to drop blocks from
+    const PART_COUNT = 12;
+    const PART_SIZE = 0.015;
+    const PART_LIFE = 120; // Particle Lifespan (frames)
+    const ZOOM_SENS = 0.005;
+    const MIN_Z = 1.0; // Min Camera Zoom (increased slightly for orbit)
+    const MAX_Z = 50;  // Max Camera Zoom (increased for orbit)
+    const DEF_Z = 10;   // Default Camera Zoom (increased for orbit view)
+    const COLLISION_CHECK_STEPS = 5;
+    const FOG_NEAR_FACTOR = 0.25;
+    const FOG_FAR_FACTOR = 1.8;
+    const WATER_LEVEL_FACTOR = 0.25;
+    const GROUND_PLANE_Y = -0.01;
+
+    const CREATURE_COUNT = 10;
+    const CREATURE_SIZE = 0.05;
+    const CREATURE_COLOR = 0xFFFF00;
+    const CREATURE_SPEED = 0.005;
+    const CREATURE_WANDER_RADIUS = 2 * BS;
+    const CREATURE_PART_COUNT_MIN = 5;
+    const CREATURE_PART_COUNT_MAX = 10;
+    const CREATURE_PART_LIFE_FACTOR = 2.5;
+    const CREATURE_CHANGE_DIR_PROB = 0.05;
+
+    // --- State Variables ---
+    let worldSize = 30;
+    const blocks = new Map();
+    const fallingBlocks = new Map();
+    const activeParticles = [];
+    const creatureParticles = [];
+    const creatureInfos = [];
+
+    let ctrlKeyPressed = false;
+    let altKeyPressed = false;
+    let isDragging = false;
+    let lastClickTime = 0;
+    let rotationY = 0;
+    let rotationX = Math.PI / 4; // Start looking down slightly more for orbit view
+    let zoomDist = DEF_Z;
+    let playerPos = new THREE.Vector3(); // Player position still tracked
+    let initStartPos = new THREE.Vector3();
+    let worldBoundaryRadius = (worldSize / 2) * BS * 1.5;
+
+    // --- Reusable Objects ---
+    const prevMouse = { x: 0, y: 0 };
+    const mouse = new THREE.Vector2();
+    const raycaster = new THREE.Raycaster();
+    const noise2D = createNoise2D();
+    const upVec = new THREE.Vector3(0, 1, 0);
+    const moveDir = new THREE.Vector3();
+    const newPos = new THREE.Vector3();
+    const tempPlayerPosCheck = new THREE.Vector3();
+    const horizMove = new THREE.Vector3();
+    const newHorizPos = new THREE.Vector3();
+    const camTarget = new THREE.Vector3();
+    const camPosition = new THREE.Vector3();
+    const creatureWanderVec = new THREE.Vector3();
+    const randomPosVec = new THREE.Vector3();
+
+    // **** Define the central pivot point for the camera ****
+    // Estimate a good Y level based on average terrain height + water level
+    const worldCenterPivot = new THREE.Vector3(0, AMP * BS * 0.4, 0);
+
+    // --- DOM Elements ---
+    const canvas = document.getElementById("gameCanvas");
+    const worldSizeInput = document.getElementById('worldSizeInput');
+    const generateButton = document.getElementById('generateButton');
+    const resetCameraButton = document.getElementById('resetCameraButton');
+
+    // --- Scene Setup ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, NEAR, FAR);
+    const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const fogColor = 0xA9CCE3;
+    scene.fog = new THREE.Fog(fogColor, 1, 2);
+    scene.background = new THREE.Color(fogColor);
+
+    // --- Geometries & Materials (Reusable) ---
+    const blockGeo = new RoundedBoxGeometry(BS, BS, BS, 2, BS * 0.1);
+    const particleGeo = new THREE.BoxGeometry(PART_SIZE, PART_SIZE, PART_SIZE);
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x8FBC8F, roughness: 0.8, metalness: 0.1 });
+    const dirtMat = new THREE.MeshStandardMaterial({ color: 0x9B7653, roughness: 0.9, metalness: 0.1 });
+    const creatureMat = new THREE.MeshBasicMaterial({ color: CREATURE_COLOR });
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x9B7653, roughness: 1.0, metalness: 0.0 });
+    const waterMat = new THREE.MeshStandardMaterial({
+        color: 0x4682B4, transparent: true, opacity: 0.75,
+        roughness: 0.2, metalness: 0.1, side: THREE.DoubleSide
+    });
+
+    // --- Lighting ---
+    const ambientLight = new THREE.AmbientLight(0x808080);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(50, 100, 75);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 500;
+    dirLight.shadow.camera.left = -50;
+    dirLight.shadow.camera.right = 50;
+    dirLight.shadow.camera.top = 50;
+    dirLight.shadow.camera.bottom = -50;
+    scene.add(dirLight);
+    scene.add(dirLight.target);
+
+    // --- Controls ---
+    const controls = { forward: false, backward: false, left: false, right: false, up: false, down: false };
+    const keys = {
+        "KeyW": "forward", "KeyS": "backward", "KeyA": "left", "KeyD": "right",
+        "Space": "up", "ShiftLeft": "down"
+    };
+
+    // --- Functions ---
+
+    const getBlockKey = (x, y, z) => `${x},${y},${z}`;
+
+    const addBlock = (x, y, z, type = 'dirt', falling = false, velY = 0) => {
+        const blockX = Math.floor(x);
+        const blockY = Math.floor(y);
+        const blockZ = Math.floor(z);
+        const key = getBlockKey(blockX, blockY, blockZ);
+        if (!blocks.has(key) && !fallingBlocks.has(key) && blockY >= 0) {
+            const material = type === 'grass' ? grassMat : dirtMat;
+            const cube = new THREE.Mesh(blockGeo, material);
+            cube.position.set(blockX * BS + BS / 2, blockY * BS + BS / 2, blockZ * BS + BS / 2);
+            cube.castShadow = true; cube.receiveShadow = true;
+            scene.add(cube);
+            const blockData = { mesh: cube, x: blockX, y: blockY, z: blockZ, type: type };
+            if (falling) {
+                blockData.velocityY = velY; fallingBlocks.set(key, blockData);
+            } else {
+                blocks.set(key, cube);
+            }
+            return cube;
+        }
+        return blocks.get(key) || fallingBlocks.get(key)?.mesh;
+    };
+
+    const removeBlock = (x, y, z) => {
+        const key = getBlockKey(x, y, z);
+        let removedMesh = null;
+        let blockType = 'dirt'; // Default type
+        if (blocks.has(key)) {
+            removedMesh = blocks.get(key);
+            blockType = removedMesh.material === grassMat ? 'grass' : 'dirt';
+            scene.remove(removedMesh); blocks.delete(key);
+        } else if (fallingBlocks.has(key)) {
+            const fb = fallingBlocks.get(key);
+            removedMesh = fb.mesh;
+            blockType = fb.type;
+            scene.remove(removedMesh); fallingBlocks.delete(key);
+        }
+        if (removedMesh) {
+            let currentY = y + 1;
+            while (true) {
+                const aboveKey = getBlockKey(x, currentY, z);
+                let blockMeshToFall = null;
+                let typeToFall = 'dirt';
+                if (blocks.has(aboveKey)) {
+                    blockMeshToFall = blocks.get(aboveKey);
+                    typeToFall = blockMeshToFall.material === grassMat ? 'grass' : 'dirt';
+                    blocks.delete(aboveKey);
+                } else if (fallingBlocks.has(aboveKey)) {
+                    // If the block above is already falling, don't interfere? Or update its state?
+                    // For simplicity, let existing falling block continue.
+                    break; // Or you might want to chain reactions differently
+                } else { break; } // No block above
+
+                if (blockMeshToFall) {
+                    fallingBlocks.set(aboveKey, {
+                        mesh: blockMeshToFall, velocityY: 0,
+                        x: x, y: currentY, z: z, type: typeToFall
+                    });
+                }
+                currentY++;
+            }
+        }
+        return removedMesh;
+    };
+
+    const getRandomSpawnPosition = (vecOut) => {
+        const maxAttempts = 50;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const edgeMargin = 2;
+            const halfSize = worldSize / 2 - edgeMargin;
+            const x = Math.floor(Math.random() * (worldSize - edgeMargin * 2) - halfSize);
+            const z = Math.floor(Math.random() * (worldSize - edgeMargin * 2) - halfSize);
+            let y = AMP + 1;
+            while (y >= 0) {
+                const blockKey = getBlockKey(x, y, z);
+                if (blocks.has(blockKey)) {
+                    vecOut.set(x * BS + BS / 2, (y + 1) * BS + PL_H / 2, z * BS + BS / 2);
+                    return true;
+                } y--;
+            }
+        }
+        console.warn("Could not find suitable spawn position.");
+        vecOut.set(0, (AMP + 1) * BS + PL_H / 2, 0);
+        return false;
+    };
+
+    const createCreature = (position) => {
+        const creatureParts = [];
+        const numParts = CREATURE_PART_COUNT_MIN + Math.floor(Math.random() * (CREATURE_PART_COUNT_MAX - CREATURE_PART_COUNT_MIN + 1));
+        const center = position.clone();
+        for (let i = 0; i < numParts; i++) {
+            const p = new THREE.Mesh(particleGeo, creatureMat);
+            p.position.set(
+                position.x + (Math.random() - 0.5) * CREATURE_SIZE * 2,
+                position.y + (Math.random() - 0.5) * CREATURE_SIZE * 2,
+                position.z + (Math.random() - 0.5) * CREATURE_SIZE * 2
+            );
+            p.userData.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * CREATURE_SPEED, 0, (Math.random() - 0.5) * CREATURE_SPEED
+            );
+            p.userData.lifespan = PART_LIFE * CREATURE_PART_LIFE_FACTOR;
+            p.castShadow = true; scene.add(p);
+            creatureParts.push(p); creatureParticles.push(p);
+        }
+        return { center, particles: creatureParts };
+    };
+
+    const initCreatures = () => {
+        creatureParticles.forEach(p => scene.remove(p));
+        creatureParticles.length = 0; creatureInfos.length = 0;
+        for (let i = 0; i < CREATURE_COUNT; i++) {
+            if (getRandomSpawnPosition(randomPosVec)) {
+                const creatureInfo = createCreature(randomPosVec);
+                creatureInfos.push(creatureInfo);
+            }
+        }
+    };
+
+    const clearWorld = () => {
+        blocks.forEach(mesh => scene.remove(mesh));
+        fallingBlocks.forEach(fb => scene.remove(fb.mesh));
+        blocks.clear(); fallingBlocks.clear();
+        creatureParticles.forEach(p => scene.remove(p));
+        creatureParticles.length = 0; creatureInfos.length = 0;
+        const ground = scene.getObjectByName('ground'); if (ground) scene.remove(ground);
+        const water = scene.getObjectByName('water'); if (water) scene.remove(water);
+        activeParticles.forEach(pg => pg.particles.forEach(p => scene.remove(p)));
+        activeParticles.length = 0;
+    };
+
+    const generateWorld = () => {
+        clearWorld(); console.time("WorldGen");
+        const halfWorldSize = worldSize / 2;
+        worldBoundaryRadius = halfWorldSize * BS * 1.2;
+        // Update world center pivot Y based on new size/amp (optional, but good)
+        worldCenterPivot.y = AMP * BS * 0.4;
+
+        for (let x = -halfWorldSize; x < halfWorldSize; x++) {
+            for (let z = -halfWorldSize; z < halfWorldSize; z++) {
+                const noiseVal = noise2D(x * FREQ, z * FREQ);
+                const h = Math.max(0, Math.round(((noiseVal + 1) / 2) * AMP));
+                for (let y = 0; y < h; y++) {
+                    const type = (y === h - 1 && y >= Math.floor(AMP * WATER_LEVEL_FACTOR)) ? 'grass' : 'dirt';
+                    addBlock(x, y, z, type);
+                }
+            }
+        }
+        const waterLevel = AMP * BS * WATER_LEVEL_FACTOR;
+        const groundSize = worldBoundaryRadius * 6;
+        const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
+        const groundPlane = new THREE.Mesh(groundGeo, groundMat);
+        groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.y = GROUND_PLANE_Y;
+        groundPlane.receiveShadow = true; groundPlane.name = 'ground'; scene.add(groundPlane);
+        const waterSize = worldBoundaryRadius * 6;
+        const waterGeo = new THREE.PlaneGeometry(waterSize, waterSize);
+        const waterPlane = new THREE.Mesh(waterGeo, waterMat);
+        waterPlane.rotation.x = -Math.PI / 2; waterPlane.position.y = waterLevel;
+        waterPlane.receiveShadow = true; waterPlane.name = 'water'; scene.add(waterPlane);
+        const fogNearDist = worldBoundaryRadius * FOG_NEAR_FACTOR;
+        const fogFarDist = worldBoundaryRadius * FOG_FAR_FACTOR;
+        scene.fog.near = fogNearDist; scene.fog.far = fogFarDist;
+        scene.fog.color.set(fogColor); renderer.setClearColor(fogColor);
+        const shadowCamSize = worldBoundaryRadius * 1.5;
+        dirLight.shadow.camera.left = -shadowCamSize; dirLight.shadow.camera.right = shadowCamSize;
+        dirLight.shadow.camera.top = shadowCamSize; dirLight.shadow.camera.bottom = -shadowCamSize;
+        dirLight.shadow.camera.updateProjectionMatrix(); dirLight.target.position.set(0, 0, 0);
+
+        if (!getRandomSpawnPosition(initStartPos)) { console.warn("Using fallback spawn position."); }
+
+        console.timeEnd("WorldGen");
+        return initStartPos.clone();
+    };
+
+    // Camera Setup - Places player, initializes camera orbit parameters
+    const setupCamera = (startPos) => {
+        playerPos.copy(startPos); // Still place the player model
+        // Initial camera rotation and zoom for orbit view
+        rotationY = -Math.PI / 4;
+        rotationX = Math.PI / 4; // Look down a bit more
+        zoomDist = DEF_Z;
+        updateCameraPosition(); // Position camera based on world pivot
+    };
+
+    // **** UPDATED Camera Position Calculation ****
+    const updateCameraPosition = () => {
+        // Calculate camera position based on orbit around worldCenterPivot
+        const offsetZ = zoomDist * Math.cos(rotationX);
+        const offsetY = zoomDist * Math.sin(rotationX);
+
+        camPosition.set(
+            worldCenterPivot.x - offsetZ * Math.sin(rotationY), // Orbit around pivot X
+            worldCenterPivot.y + offsetY,                      // Height relative to pivot Y + pitch
+            worldCenterPivot.z - offsetZ * Math.cos(rotationY)  // Orbit around pivot Z
+        );
+
+        camera.position.copy(camPosition);
+
+        // Set the lookAt target to the world center pivot
+        camTarget.copy(worldCenterPivot);
+        camera.lookAt(camTarget);
+    };
+
+    const checkCollision = (posToCheck) => {
+        const feetY = posToCheck.y - PL_H / 2;
+        const headY = posToCheck.y + PL_H / 2;
+        for (let i = 0; i < COLLISION_CHECK_STEPS; i++) {
+            const checkY = feetY + (headY - feetY) * (i / (COLLISION_CHECK_STEPS - 1));
+            const blockY = Math.floor(checkY / BS);
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 2) {
+                const checkX = posToCheck.x + PL_R * Math.cos(angle);
+                const checkZ = posToCheck.z + PL_R * Math.sin(angle);
+                const blockX = Math.floor(checkX / BS); const blockZ = Math.floor(checkZ / BS);
+                const key = getBlockKey(blockX, blockY, blockZ);
+                if (blocks.has(key) || fallingBlocks.has(key)) { return true; }
+            }
+             const blockXCenter = Math.floor(posToCheck.x / BS);
+             const blockZCenter = Math.floor(posToCheck.z / BS);
+             const keyCenter = getBlockKey(blockXCenter, blockY, blockZCenter);
+             if (blocks.has(keyCenter) || fallingBlocks.has(keyCenter)) { return true; }
+        } return false;
+    };
+
+    const createLandSplash = (pos, material) => {
+        const particles = []; const creationTime = performance.now();
+        for (let i = 0; i < PART_COUNT; i++) {
+            const p = new THREE.Mesh(particleGeo, material);
+            p.position.copy(pos); p.position.y += BS / 3;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.01 + Math.random() * 0.02;
+            p.userData.velocity = new THREE.Vector3(
+                Math.cos(angle) * speed, 0.02 + Math.random() * 0.04, Math.sin(angle) * speed
+            );
+            p.userData.lifespan = PART_LIFE; p.scale.set(1, 1, 1);
+            scene.add(p); particles.push(p);
+        } activeParticles.push({ particles: particles, creationTime: creationTime });
+    };
+
+    const applyGravity = () => { /* Falling block logic remains the same */
+        if (fallingBlocks.size === 0) return;
+        const keysToDelete = []; const blocksToAdd = [];
+        fallingBlocks.forEach((fb, key) => {
+            fb.velocityY += GRAV * 0.1; fb.mesh.position.y += fb.velocityY;
+            const currentBlockY = Math.floor(fb.mesh.position.y / BS - 0.01);
+            const targetBlockY = currentBlockY;
+            const belowKey = getBlockKey(fb.x, targetBlockY - 1, fb.z);
+            const hitGround = targetBlockY < 0;
+            const hitStaticBlock = blocks.has(belowKey);
+            const hitFallingBlock = fallingBlocks.has(belowKey) && belowKey !== key;
+             if (hitGround || hitStaticBlock || hitFallingBlock) {
+                const landedY = Math.max(0, targetBlockY);
+                const finalKey = getBlockKey(fb.x, landedY, fb.z);
+                fb.mesh.position.y = landedY * BS + BS / 2;
+                if (!blocks.has(finalKey) && !fallingBlocks.has(finalKey)) {
+                    blocksToAdd.push({ key: finalKey, mesh: fb.mesh });
+                    createLandSplash(fb.mesh.position, fb.mesh.material);
+                } else { scene.remove(fb.mesh); }
+                keysToDelete.push(key);
+            } else {
+                if (currentBlockY !== fb.y) {
+                    const newKey = getBlockKey(fb.x, currentBlockY, fb.z);
+                    if (!fallingBlocks.has(newKey)) {
+                         keysToDelete.push(key); fb.y = currentBlockY;
+                         fallingBlocks.set(newKey, fb);
+                    } else {
+                         const landedY = Math.max(0, targetBlockY);
+                         const finalKey = getBlockKey(fb.x, landedY, fb.z);
+                         fb.mesh.position.y = landedY * BS + BS / 2;
+                          if (!blocks.has(finalKey) && !fallingBlocks.has(finalKey)) {
+                              blocksToAdd.push({ key: finalKey, mesh: fb.mesh });
+                              createLandSplash(fb.mesh.position, fb.mesh.material);
+                          } else { scene.remove(fb.mesh); }
+                          keysToDelete.push(key);
+                    }
+                }
+            }
+        });
+        keysToDelete.forEach(key => fallingBlocks.delete(key));
+        blocksToAdd.forEach(item => blocks.set(item.key, item.mesh));
+    };
+
+    const updateParticles = () => { /* Particle logic remains the same */
+        for (let i = activeParticles.length - 1; i >= 0; i--) {
+            const pg = activeParticles[i];
+            for (let j = pg.particles.length - 1; j >= 0; j--) {
+                const p = pg.particles[j]; p.userData.lifespan--;
+                if (p.userData.lifespan <= 0 || p.scale.x < 0.05) {
+                    scene.remove(p); pg.particles.splice(j, 1);
+                } else {
+                    p.userData.velocity.y += GRAV; p.position.add(p.userData.velocity);
+                    p.scale.multiplyScalar(0.98);
+                    if (p.position.y < GROUND_PLANE_Y + PART_SIZE / 2) {
+                         p.position.y = GROUND_PLANE_Y + PART_SIZE / 2;
+                         p.userData.velocity.y *= -0.4;
+                         p.userData.velocity.x *= 0.8; p.userData.velocity.z *= 0.8;
+                    }
+                }
+            } if (pg.particles.length === 0) { activeParticles.splice(i, 1); }
+        }
+    };
+
+    const updateCreatures = () => { /* Creature logic remains the same */
+        const halfWorldSizeBS = (worldSize / 2) * BS;
+        for (let i = creatureParticles.length - 1; i >= 0; i--) {
+            const p = creatureParticles[i]; p.userData.lifespan--;
+            if (p.userData.lifespan <= 0) {
+                scene.remove(p); creatureParticles.splice(i, 1);
+            } else {
+                p.position.add(p.userData.velocity);
+                const blockX = Math.floor(p.position.x / BS); const blockZ = Math.floor(p.position.z / BS);
+                let groundY = GROUND_PLANE_Y; let checkY = Math.floor(p.position.y / BS);
+                while(checkY >= 0) { const belowKey = getBlockKey(blockX, checkY, blockZ); if(blocks.has(belowKey)) { groundY = checkY * BS + BS; break; } checkY--; }
+                const minY = groundY + CREATURE_SIZE / 2;
+                if (p.position.y < minY) { p.position.y = minY; p.userData.velocity.y = 0; }
+                else if (p.position.y > minY + BS * 0.1) { p.userData.velocity.y += GRAV * 0.5; }
+                 if (Math.abs(p.position.x) > halfWorldSizeBS || Math.abs(p.position.z) > halfWorldSizeBS) {
+                    creatureWanderVec.set(-p.position.x, 0, -p.position.z).normalize().multiplyScalar(CREATURE_SPEED);
+                    p.userData.velocity.x = creatureWanderVec.x; p.userData.velocity.z = creatureWanderVec.z;
+                 } else if (Math.random() < CREATURE_CHANGE_DIR_PROB) {
+                    const angle = Math.random() * Math.PI * 2;
+                    p.userData.velocity.x = Math.cos(angle) * CREATURE_SPEED; p.userData.velocity.z = Math.sin(angle) * CREATURE_SPEED;
+                 }
+                 const speedLimit = CREATURE_SPEED * 1.5;
+                 if (p.userData.velocity.lengthSq() > speedLimit * speedLimit) { p.userData.velocity.normalize().multiplyScalar(speedLimit); }
+            }
+        }
+    };
+
+    // --- Animation Loop ---
+    const animate = () => {
+        requestAnimationFrame(animate);
+
+        // --- Player Movement (Independent of Camera Orbit) ---
+        // Horizontal
+        moveDir.set(0, 0, 0);
+        if (controls.forward) moveDir.z -= 1; if (controls.backward) moveDir.z += 1;
+        if (controls.left) moveDir.x -= 1; if (controls.right) moveDir.x += 1;
+        if (moveDir.lengthSq() > 0) {
+            moveDir.normalize();
+            // Apply world rotation, NOT camera rotation, if player movement should be world-aligned
+            // Or apply camera's Y rotation if movement should be relative to view direction
+            // Let's keep it relative to camera view direction for now:
+            const cameraQuaternionY = new THREE.Quaternion();
+             camera.getWorldQuaternion(cameraQuaternionY); // Get world quaternion
+             // Zero out X and Z components of quaternion to only get Y rotation
+             cameraQuaternionY.x = 0;
+             cameraQuaternionY.z = 0;
+             cameraQuaternionY.normalize();
+
+             moveDir.applyQuaternion(cameraQuaternionY); // Apply only the Y rotation
+
+            moveDir.y = 0; // Ensure horizontal movement
+            moveDir.normalize();
+            newPos.copy(playerPos).addScaledVector(moveDir, MOVE_VEL);
+             const distanceToCenterSq = newPos.x * newPos.x + newPos.z * newPos.z;
+             if (distanceToCenterSq < worldBoundaryRadius * worldBoundaryRadius) {
+                 tempPlayerPosCheck.copy(newPos);
+                 if (!checkCollision(tempPlayerPosCheck)) { playerPos.copy(newPos); }
+                 else {
+                     horizMove.set(moveDir.x, 0, moveDir.z).normalize();
+                     newHorizPos.copy(playerPos).addScaledVector(horizMove, MOVE_VEL);
+                      tempPlayerPosCheck.copy(newHorizPos);
+                     if (!checkCollision(tempPlayerPosCheck)) { playerPos.copy(newHorizPos); }
+                 }
+             }
+        }
+        // Vertical
+        if (controls.up) { playerPos.y += MOVE_VEL; }
+        if (controls.down) {
+            const proposedY = playerPos.y - MOVE_VEL;
+            // Check collision before committing the downward move
+             tempPlayerPosCheck.set(playerPos.x, proposedY, playerPos.z);
+             if (!checkCollision(tempPlayerPosCheck) && (proposedY - PL_H / 2) >= GROUND_PLANE_Y) {
+                 playerPos.y = proposedY; // Move down only if no collision and above ground
+             } else if (checkCollision(tempPlayerPosCheck)) {
+                // If collision, snap to surface above? Complex. For now, just stop.
+             } else if ((proposedY - PL_H / 2) < GROUND_PLANE_Y) {
+                // Prevent going below ground plane
+                 playerPos.y = GROUND_PLANE_Y + PL_H / 2;
+             }
+        }
+
+        // --- Update Camera (Orbiting World Center) ---
+        updateCameraPosition();
+
+        // --- Update Game Logic ---
+        applyGravity();
+        updateParticles();
+        updateCreatures();
+
+        // --- Render ---
+        renderer.render(scene, camera);
+    };
+
+    // --- Event Handlers ---
+    const handleKey = (state) => (e) => {
+        if (document.activeElement === worldSizeInput) return;
+        if (keys[e.code]) controls[keys[e.code]] = state;
+        if (e.key === 'Control' || e.key === 'Meta') ctrlKeyPressed = state;
+        if (e.key === 'Alt') altKeyPressed = state;
+         if (keys[e.code] || e.key === 'Control' || e.key === 'Meta' || e.key === 'Alt') {
+             e.preventDefault();
+         }
+    };
+
+    const onMouseDown = (e) => {
+        if (e.target !== canvas || e.button !== 0) return;
+        isDragging = true; prevMouse.x = e.clientX; prevMouse.y = e.clientY;
+        canvas.style.cursor = 'grabbing';
+        const now = performance.now(); const isDoubleClick = now - lastClickTime < DC_THRESH;
+        lastClickTime = now;
+        if (isDoubleClick) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const meshesToCheck = Array.from(blocks.values());
+            const intersects = raycaster.intersectObjects(meshesToCheck);
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                if (hit.face && hit.object.position) {
+                    const objPos = hit.object.position; const normal = hit.face.normal;
+                    const hitX = Math.floor(objPos.x / BS); const hitY = Math.floor(objPos.y / BS); const hitZ = Math.floor(objPos.z / BS);
+                    if (ctrlKeyPressed) { removeBlock(hitX, hitY, hitZ); }
+                    else {
+                        const placeX = hitX + normal.x; const placeY = hitY + normal.y; const placeZ = hitZ + normal.z;
+                        if (altKeyPressed) { addBlock(placeX, placeY + DROP_H_BLOCKS, placeZ, 'dirt', true, 0); }
+                        else {
+                            const playerFeetY = playerPos.y - PL_H / 2; const playerHeadY = playerPos.y + PL_H / 2;
+                            const playerBlockX = Math.floor(playerPos.x / BS);
+                            const playerBlockFeetY = Math.floor(playerFeetY / BS); const playerBlockHeadY = Math.floor(playerHeadY / BS);
+                            const playerBlockZ = Math.floor(playerPos.z / BS);
+                            if (!(placeX === playerBlockX && (placeY === playerBlockFeetY || placeY === playerBlockHeadY) && placeZ === playerBlockZ)) {
+                                addBlock(placeX, placeY, placeZ, 'dirt');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    const onMouseMove = (e) => {
+        if (!isDragging) return;
+        const deltaX = e.clientX - prevMouse.x; const deltaY = e.clientY - prevMouse.y;
+        rotationY -= deltaX * MOUSE_SENS; rotationX -= deltaY * MOUSE_SENS;
+        rotationX = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, rotationX));
+        prevMouse.x = e.clientX; prevMouse.y = e.clientY;
+        e.preventDefault();
+    };
+
+    const onMouseUp = (e) => {
+        if (e.button !== 0) return;
+        if (isDragging) { isDragging = false; canvas.style.cursor = 'grab'; }
+    };
+
+    const onMouseLeave = () => {
+        if (isDragging) { isDragging = false; canvas.style.cursor = 'grab'; }
+    };
+
+    const onMouseWheel = (e) => {
+        e.preventDefault(); zoomDist -= e.deltaY * ZOOM_SENS;
+        zoomDist = Math.max(MIN_Z, Math.min(MAX_Z, zoomDist));
+    };
+
+    const onWindowResize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+    };
+
+    // **** UPDATED Reset Camera View ****
+    const resetCameraView = () => {
+        // Reset rotation and zoom for the orbit camera
+        rotationY = -Math.PI / 4;
+        rotationX = Math.PI / 4;
+        zoomDist = DEF_Z;
+        updateCameraPosition(); // Update based on world pivot
+    };
+
+    const regenerateWorld = () => {
+         const newSize = parseInt(worldSizeInput.value);
+         if (!isNaN(newSize) && newSize >= 10 && newSize <= 200) {
+             worldSize = newSize;
+             const startPos = generateWorld(); // Generates world, updates pivot Y, returns player start pos
+             setupCamera(startPos); // Places player, sets initial camera orbit relative to pivot
+             initCreatures(); // Re-initialize creatures
+         } else {
+             alert("Invalid size. Please enter a number between 10 and 200.");
+             worldSizeInput.value = worldSize; // Reset input
+         }
+    };
+
+    // --- Initialize ---
+    document.addEventListener("keydown", handleKey(true));
+    document.addEventListener("keyup", handleKey(false));
+    canvas.addEventListener("mousedown", onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('mouseleave', onMouseLeave);
+    window.addEventListener('wheel', onMouseWheel, { passive: false });
+    window.addEventListener('resize', onWindowResize);
+    generateButton.addEventListener('click', regenerateWorld);
+    resetCameraButton.addEventListener('click', resetCameraView);
+
+    // Initial World Generation and Start
+    const initialStartPosValue = generateWorld(); // Generates world, sets pivot
+    setupCamera(initialStartPosValue); // Places player, sets initial camera orbit
+    initCreatures();
+    animate();
+
+</script>
+</body>
+</html>

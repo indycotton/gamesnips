@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Water Simulation</title>
+<style>
+  body { margin: 0; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="waterCanvas"></canvas>
+<script>
+  const canvas = document.getElementById('waterCanvas');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  const numParticles = 300;
+  const gravity = 0.1;
+  const interactionRadius = 50;
+  const dragFactor = 0.98; // For slowing down particles
+
+  let canvasWidth = window.innerWidth;
+  let canvasHeight = window.innerHeight;
+
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+
+  class Particle {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.vx = (Math.random() - 0.5) * 2;
+      this.vy = (Math.random() - 0.5) * 2;
+      this.radius = Math.random() * 3 + 1;
+    }
+
+    update() {
+      this.vy += gravity;
+      this.x += this.vx;
+      this.y += this.vy;
+      this.vx *= dragFactor;
+      this.vy *= dragFactor;
+
+      // Boundary interactions (simple bouncing)
+      if (this.x + this.radius > canvasWidth || this.x - this.radius < 0) {
+        this.vx *= -1;
+      }
+      if (this.y + this.radius > canvasHeight || this.y - this.radius < 0) {
+        this.vy *= -1;
+      }
+
+      // Basic interaction with other particles (crude approximation)
+      for (let i = 0; i < particles.length; i++) {
+        const other = particles[i];
+        if (other !== this) {
+          const dx = this.x - other.x;
+          const dy = this.y - other.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < interactionRadius) {
+            const angle = Math.atan2(dy, dx);
+            const force = (interactionRadius - distance) / interactionRadius * 0.5; // Simple repulsive force
+            this.vx += Math.cos(angle) * force;
+            this.vy += Math.sin(angle) * force;
+          }
+        }
+      }
+    }
+
+    draw() {
+      const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+      gradient.addColorStop(0, 'rgba(0, 100, 255, 0.8)'); // Darker blue
+      gradient.addColorStop(1, 'rgba(100, 200, 255, 0.3)'); // Lighter blue
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function init() {
+    particles = [];
+    for (let i = 0; i < numParticles; i++) {
+      particles.push(new Particle(Math.random() * canvasWidth, Math.random() * canvasHeight));
+    }
+  }
+
+  let isDragging = false;
+  let lastMouseX = 0;
+  let lastMouseY = 0;
+
+  canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      const deltaX = e.clientX - lastMouseX;
+      const deltaY = e.clientY - lastMouseY;
+
+      // Apply a force to particles near the mouse
+      for (const particle of particles) {
+        const dx = particle.x - e.clientX;
+        const dy = particle.y - e.clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 50) {
+          particle.vx -= deltaX * 0.1;
+          particle.vy -= deltaY * 0.1;
+        }
+      }
+
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    }
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    for (const particle of particles) {
+      particle.update();
+      particle.draw();
+    }
+  }
+
+  init();
+  animate();
+
+  window.addEventListener('resize', () => {
+    canvasWidth = window.innerWidth;
+    canvasHeight = window.innerHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    init(); // Reinitialize particles for new dimensions
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced 2D Fluid Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+        }
+
+        #menu {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            font-size: 14px;
+        }
+        #menu label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        #menu input[type="range"], #menu input[type="checkbox"], #menu button {
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        #menu button {
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            color: white;
+            cursor: pointer;
+        }
+        #menu button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="waterCanvas"></canvas>
+
+    <div id="menu">
+        <label for="gravitySlider">Gravity:</label>
+        <input type="range" id="gravitySlider" min="-1" max="1" step="0.01" value="0.1">
+        <span id="gravityValue">Gravity: 0.1</span>
+
+        <label for="numParticlesSlider">Particle Density:</label>
+        <input type="range" id="numParticlesSlider" min="100" max="2000" step="100" value="1000">
+        <span id="numParticlesValue">Particles: 1000</span>
+
+        <label for="shaderToggle">Toggle Shaders (Lighting):</label>
+        <input type="checkbox" id="shaderToggle" checked>
+
+        <button id="resetBtn">Reset Simulation</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('waterCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        let gravity = 0.1;
+        let numParticles = 1000;
+        const interactionRadius = 50;
+        const interactionRadiusSquared = interactionRadius * interactionRadius;
+        const dragFactor = 0.98;
+        const lightSource = { x: canvas.width * 0.5, y: canvas.height * 0.25 };
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.radius = Math.random() * 3 + 1;
+            }
+
+            update() {
+                this.vy += gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= dragFactor;
+                this.vy *= dragFactor;
+
+                if (this.x + this.radius > canvas.width || this.x - this.radius < 0) {
+                    this.vx *= -1;
+                }
+                if (this.y + this.radius > canvas.height || this.y - this.radius < 0) {
+                    this.vy *= -1;
+                }
+
+                for (const other of particles) {
+                    if (other !== this) {
+                        const dx = this.x - other.x;
+                        const dy = this.y - other.y;
+                        const distanceSquared = dx * dx + dy * dy;
+
+                        if (distanceSquared < interactionRadiusSquared) {
+                            const distance = Math.sqrt(distanceSquared);
+                            const angle = Math.atan2(dy, dx);
+                            const force = (interactionRadius - distance) / interactionRadius * 0.5;
+                            this.vx += Math.cos(angle) * force;
+                            this.vy += Math.sin(angle) * force;
+                        }
+                    }
+                }
+            }
+
+            draw(applyLighting) {
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                let baseColor = 'rgba(0, 100, 255, 0.8)';
+                let highlightColor = 'rgba(100, 200, 255, 0.3)';
+
+                if (applyLighting) {
+                    const dx = this.x - lightSource.x;
+                    const dy = this.y - lightSource.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const normalizedDistance = Math.min(1, distance / Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height));
+                    const intensity = 1 - normalizedDistance;
+
+                    baseColor = `rgba(0, ${100 + intensity * 155}, ${255 - intensity * 155}, 0.8)`;
+                    highlightColor = `rgba(100, ${200 - intensity * 100}, ${255}, 0.3)`;
+                }
+
+                gradient.addColorStop(0, baseColor);
+                gradient.addColorStop(1, highlightColor);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function init() {
+            particles.length = 0;
+            for (let i = 0; i < numParticles; i++) {
+                particles.push(new Particle(Math.random() * canvas.width, Math.random() * canvas.height));
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const applyShaders = document.getElementById('shaderToggle').checked;
+            for (const particle of particles) {
+                particle.update();
+                particle.draw(applyShaders);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            init();
+        });
+
+        document.getElementById('gravitySlider').addEventListener('input', (e) => {
+            gravity = parseFloat(e.target.value);
+            document.getElementById('gravityValue').textContent = `Gravity: ${e.target.value}`;
+        });
+
+        document.getElementById('numParticlesSlider').addEventListener('input', (e) => {
+            numParticles = parseInt(e.target.value);
+            document.getElementById('numParticlesValue').textContent = `Particles: ${e.target.value}`;
+            init();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', init);
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
