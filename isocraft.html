@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Babylon.js Water Shader</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+        var engine = new BABYLON.Engine(canvas, true);
+
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            scene.ambientColor = new BABYLON.Color3(0.01, 0, 0);
+            var camera = new BABYLON.ArcRotateCamera("camera1", 12, Math.PI/3, 55, BABYLON.Vector3.Zero());
+            camera.setTarget(BABYLON.Vector3.Zero());
+            camera.attachControl(canvas, true);
+            camera.wheelPrecision = 120.0;
+            
+            var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.7;
+
+            var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 23*2, height: 23*2}, scene);
+            ground.material = new BABYLON.StandardMaterial("groundMat", scene);
+            ground.material.diffuseTexture = new BABYLON.Texture("textures/crate.png", scene);
+
+            var mountain = BABYLON.MeshBuilder.CreateGroundFromHeightMap("gdhm", "textures/heightMap.png", {width:45, height :45, subdivisions: 210, maxHeight: 5});
+            mountain.material = new BABYLON.StandardMaterial("groundMat", scene);
+            mountain.material.diffuseTexture = new BABYLON.Texture("textures/grass.png", scene);
+            mountain.material.diffuseTexture.uScale = mountain.material.diffuseTexture.vScale = 8;
+            mountain.material.specularColor = new BABYLON.Color3(0, .1, 0);
+            mountain.position.y = .5;
+            
+            var water = BABYLON.Mesh.CreateGround("water", 45, 45, 64, scene);
+            water.position.y+=2;
+
+            // Adding trees on top of the mountain
+            function addTree(x, z) {
+                var tree = BABYLON.MeshBuilder.CreateCylinder("tree", {height: 5, diameterTop: 0.2, diameterBottom: 1}, scene);
+                var treeMaterial = new BABYLON.StandardMaterial("treeMaterial", scene);
+                treeMaterial.diffuseColor = new BABYLON.Color3(0.5, 0.25, 0); // Brown for the trunk
+                tree.material = treeMaterial;
+                tree.position = new BABYLON.Vector3(x, 2.5, z); // Position tree above the ground
+                var leaf = BABYLON.MeshBuilder.CreateSphere("leaf", {diameter: 3}, scene);
+                var leafMaterial = new BABYLON.StandardMaterial("leafMaterial", scene);
+                leafMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0); // Green leaves
+                leaf.material = leafMaterial;
+                leaf.position = new BABYLON.Vector3(x, 5, z); // Position the leaves above the trunk
+            }
+
+            // Place trees randomly on the mountain
+            for (var i = 0; i < 10; i++) {
+                var randomX = Math.random() * 45 - 22.5; // Random x-coordinate within the mountain range
+                var randomZ = Math.random() * 45 - 22.5; // Random z-coordinate within the mountain range
+                addTree(randomX, randomZ);
+            }
+
+            // stylized water shader (as before)
+
+            var time = 0;
+            scene.registerBeforeRender(function() {
+                time += engine.getDeltaTime() * 0.001;
+            });
+
+            return scene;
+        };
+
+        var scene = createScene();
+        engine.runRenderLoop(function () {
+            scene.render();
+        });
+
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>

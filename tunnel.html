@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Low Pixel Tunnel Runner</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.139.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.139.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.139.0/examples/js/loaders/GLTFLoader.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* Basic body styling to remove default margins and hide overflow */
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Press Start 2P', cursive; /* Apply the pixel font */
+            background-color: #1a1a1a; /* Dark background */
+        }
+
+        /* Canvas styling - fixed position to cover the viewport */
+        #gameCanvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0; /* Background layer */
+            width: 100%; /* Make canvas responsive */
+            height: 100%; /* Make canvas responsive */
+        }
+
+        /* Instructions overlay styling - centered, dark background, pixel border */
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.85);
+            color: #e0e0e0;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            z-index: 2; /* Ensure instructions are above everything */
+            border: 4px solid #c0392b; /* Red pixel border */
+            box-shadow: 0 0 15px rgba(231, 76, 60, 0.5); /* Red glow effect */
+            display: block; /* Initially visible */
+        }
+        #instructions h2 {
+            margin-bottom: 15px;
+            font-size: 1.6em;
+            color: #e74c3c; /* Bright red title */
+            text-shadow: 2px 2px #881100; /* Title shadow */
+        }
+        #instructions p {
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+        #instructions button {
+            padding: 12px 25px;
+            background-color: #e74c3c; /* Red button */
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            font-family: 'Press Start 2P', cursive;
+            box-shadow: 0 5px #c0392b; /* Button shadow */
+            text-transform: uppercase;
+        }
+        #instructions button:hover {
+            background-color: #c0392b; /* Darker red on hover */
+        }
+        #instructions button:active {
+            box-shadow: 0 2px #c0392b;
+            transform: translateY(3px); /* Button press effect */
+        }
+
+        /* Game overlay (score/speed/pause) styling - top corners */
+        #gameOverlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px; /* Allow positioning on right */
+            color: #fff;
+            z-index: 1; /* Above game, below instructions */
+            font-size: 0.9em;
+            display: none; /* Initially hidden */
+            justify-content: space-between; /* Space out left and right items */
+            align-items: flex-start; /* Align items to the top */
+            pointer-events: none; /* Allow clicks to pass through overlay background */
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+        }
+        #gameStats { /* Container for score and speed */
+            display: flex;
+            flex-direction: column;
+        }
+        #scoreDisplay, #speedDisplay {
+            margin-bottom: 12px;
+            background-color: rgba(0, 0, 0, 0.75);
+            padding: 10px 12px;
+            border-radius: 6px;
+            min-width: 180px;
+            text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Pause Button Styling */
+        #pauseButton {
+            padding: 10px 15px;
+            background-color: #f39c12; /* Orange color */
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            font-family: 'Press Start 2P', cursive;
+            box-shadow: 0 4px #b87333; /* Darker orange shadow */
+            text-transform: uppercase;
+            pointer-events: auto; /* Make button clickable */
+        }
+        #pauseButton:hover {
+            background-color: #d35400; /* Darker orange on hover */
+        }
+        #pauseButton:active {
+            box-shadow: 0 2px #b87333;
+            transform: translateY(2px); /* Button press effect */
+        }
+
+        /* Pause Overlay Styling - centered text */
+        #pauseOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+            color: #fff;
+            display: flex; /* Use flexbox for centering */
+            flex-direction: column; /* Stack text vertically */
+            justify-content: center; /* Center vertically */
+            align-items: center; /* Center horizontally */
+            font-size: 2em;
+            z-index: 1; /* Below instructions, above game */
+            display: none; /* Hidden by default */
+            text-align: center; /* Center text if it wraps */
+        }
+         #pauseOverlay small {
+             font-size: 0.5em; /* Smaller text for the sub-message */
+             margin-top: 10px;
+           }
+
+         /* --- NEW: Score Effect Overlay --- */
+           #scoreEffectsOverlay {
+               position: fixed;
+               top: 0;
+               left: 0;
+               width: 100%;
+               height: 100%;
+               pointer-events: none; /* Allow clicks to pass through */
+               overflow: hidden;
+               z-index: 3; /* Above everything except maybe instructions */
+           }
+
+         /* --- NEW: Score Popup Style --- */
+           .score-popup {
+               position: absolute;
+               /* --- MODIFIED: Increased font size --- */
+               font-size: 4.5em; /* VERY LARGE TEXT */
+               font-weight: bold;
+               color: #39ff14; /* Bright green */
+               /* --- MODIFIED: Slightly stronger shadow --- */
+               text-shadow: 2px 2px 5px rgba(0,0,0,0.9);
+               white-space: nowrap;
+               opacity: 0; /* Start hidden */
+               transform: translate(-50%, -50%) scale(0.8); /* Center on point, start small */
+               transition: opacity 1.5s ease-out, transform 1.5s ease-out, top 1.5s ease-out; /* Animation */
+           }
+
+           .score-popup.show {
+               opacity: 1;
+               transform: translate(-50%, -150%) scale(1); /* Move up and scale to normal size */
+           }
+
+           .score-popup.fade-out { /* Trigger fade out */
+               opacity: 0;
+               transform: translate(-50%, -200%) scale(0.5); /* Continue moving up, shrink */
+           }
+
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="scoreEffectsOverlay"></div>
+
+    <div id="instructions">
+        <h2>Cube Runner 3D</h2>
+        <p>Click "Start Game" to begin.</p>
+        <p>Click anywhere in the game area to lock mouse and look around.</p>
+        <p>Fly through the chaotic cube tunnel!</p>
+        <p>Try to go as far as possible!</p>
+        <button id="startButton">Start Game</button>
+    </div>
+
+    <div id="pauseOverlay">PAUSED<br><small>(Click to Resume)</small></div>
+
+    <div id="gameOverlay">
+        <div id="gameStats">
+            <div id="scoreDisplay">Score: 0</div>
+            <div id="speedDisplay">Speed: 10.0 units/s</div>
+        </div>
+        <button id="pauseButton">Pause</button>
+    </div>
+
+    <script>
+        // --- Three.js Scene Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: false // Disable antialiasing for a pixelated look
+        });
+        renderer.useLegacyLights = false; // Use modern lighting
+        renderer.outputEncoding = THREE.sRGBEncoding; // Correct color output
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a); // Dark background color
+        scene.fog = new THREE.Fog(scene.background, 25, 70); // Fog effect for depth
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Camera position will be managed by PointerLockControls's object
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x808080, 2.5); // Soft ambient light
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffa080, 4.5); // Warm directional light
+        directionalLight.position.set(25, 25, 25); // Position of the light source
+        scene.add(directionalLight);
+
+        // --- PointerLockControls Setup ---
+        const controls = new THREE.PointerLockControls(camera, canvas);
+        scene.add(controls.getObject());
+
+        // --- GLTF Loader Setup ---
+        const gltfLoader = new THREE.GLTFLoader();
+
+        // --- Model Configuration ---
+        // IMPORTANT: Update these URLs or ensure models are served from localhost
+        const modelConfigs = [
+             { url: 'http://localhost/humanskull.glb', scale: new THREE.Vector3(4, 4, 4), yOffset: -2, spinAxis: 'y', spinSpeed: 0.5 },
+             { url: 'http://localhost/Armadillo2025.glb', scale: new THREE.Vector3(4, 4, 4), yOffset: -1, spinAxis: 'y', spinSpeed: -0.4 },
+             { url: 'http://localhost/black_rat__free_download.glb', scale: new THREE.Vector3(4, 4, 4), yOffset: -1.5, spinAxis: 'x', spinSpeed: 0.6 },
+             { url: 'http://localhost/Blue_end.glb', scale: new THREE.Vector3(4, 4, 4), yOffset: 0, spinAxis: 'z', spinSpeed: 0.3 },
+             // Added new GLB files with URL encoding
+             { url: 'http://localhost/glb%20%281%29.glb', scale: new THREE.Vector3(5, 5, 5), yOffset: -1, spinAxis: 'y', spinSpeed: 0.4 },
+             { url: 'http://localhost/glb%20%282%29.glb', scale: new THREE.Vector3(3, 3, 3), yOffset: 0, spinAxis: 'x', spinSpeed: -0.5 },
+             { url: 'http://localhost/glb%20%283%29.glb', scale: new THREE.Vector3(6, 6, 6), yOffset: -2.5, spinAxis: 'z', spinSpeed: 0.7 },
+             { url: 'http://localhost/glb%20%284%29.glb', scale: new THREE.Vector3(4, 4, 4), yOffset: -0.5, spinAxis: 'y', spinSpeed: -0.6 }
+        ];
+        let activeRandomModels = [];
+
+        // --- Game Variables ---
+        // MODIFIED: Increased tunnelRadius to narrow the central gap
+        const tunnelRadius = 7.5; // Increased from 6
+        const outerTubeRadius = tunnelRadius * 1.5;
+        const cubeSize = 0.5;
+        const ringCubes = 25;
+        const ringSpacing = 0.8;
+        const tunnelSegmentLength = 40; // Number of rings in a segment
+        const segmentTotalLength = tunnelSegmentLength * ringSpacing; // Z-depth of one segment
+        // MODIFIED: Slightly reduced cubeRandomOffset
+        const cubeRandomOffset = cubeSize * 6; // Reduced from cubeSize * 7
+        // MODIFIED: Increased initialSegmentsCount to make the tunnel much longer visually
+        const initialSegmentsCount = 40; // Increased from 20
+        // MODIFIED: Increased distanceToRecycleBehindPlayer
+        const distanceToRecycleBehindPlayer = 30.0; // Increased from 20.0
+
+        // Global variable to track the Z position of the furthest ahead tunnel segment origin
+        let currentFurthestAheadZ = 0;
+
+
+        let score = 0;
+        let gameSpeed = 10;
+        let isGameStarted = false;
+        let isPaused = false;
+        let animationFrameId;
+        let previousTime = performance.now();
+        let frameCounter = 0;
+
+        // Score Constants
+        const HIT_BONUS = 1000000;
+        const PLAYER_HIT_PENALTY = 500000;
+        const PLAYER_COLLISION_RADIUS = 1.5;
+
+        // --- Random Model Spawning Variables ---
+        const modelSpawnDistance = 100;
+        const modelSpawnFrequency = 50;
+        const modelCleanupDistance = 50;
+        let nextModelSpawnZ = -modelSpawnFrequency;
+
+        // --- Pixelation Setup ---
+        const renderTargetWidth = 320;
+        const renderTargetHeight = 240;
+        const renderTarget = new THREE.WebGLRenderTarget(renderTargetWidth, renderTargetHeight, {
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            encoding: THREE.sRGBEncoding
+        });
+        const postScene = new THREE.Scene();
+        const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const postQuad = new THREE.Mesh(
+            new THREE.PlaneGeometry(2, 2),
+            new THREE.MeshBasicMaterial({ map: renderTarget.texture })
+        );
+        postScene.add(postQuad);
+
+        // --- Cube Tunnel Components ---
+        let cubeGeometry; // Shared geometry
+        let cubeMaterial; // Shared material
+        let tunnelSegments = []; // Array holding the InstancedMesh segments
+        const dummy = new THREE.Object3D(); // Reusable object for matrix calculation
+        const tempMatrix = new THREE.Matrix4(); // Reusable matrix for collision checks
+
+        // --- Color Palette ---
+        const mudColors = [
+             new THREE.Color(0x8B4513), new THREE.Color(0xA0522D), new THREE.Color(0xD2691E),
+             new THREE.Color(0xCD853F), new THREE.Color(0xD2B48C), new THREE.Color(0xBC8F8F),
+             new THREE.Color(0xA52A2A), new THREE.Color(0xB8860B), new THREE.Color(0xF4A460),
+             new THREE.Color(0xC3B091), new THREE.Color(0xDEB887), new THREE.Color(0xF5F5DC)
+        ];
+
+        // --- Outer Tube Components ---
+        let outerTubeGeometry;
+        let outerTubeMaterial;
+        let outerTube;
+
+        // --- Torpedo Variables & Pooling ---
+        const torpedoRelativeSpeed = 20;
+        const torpedoLifetime = 3;
+        const TORPEDO_POOL_SIZE = 50;
+        let torpedoPool = [];
+        let activeTorpedos = [];
+        let sharedTorpedoGeometry;
+        let sharedTorpedoMaterial;
+        const reusableTorpedoDirection = new THREE.Vector3();
+
+        // --- Explosion Variables & Pooling ---
+        const explosionRadius = 5; // Used for cube destruction check, not just particles
+        const explosionParticleCount = 20;
+        const bonusHitParticleMultiplier = 3;
+        const explosionParticleSpeed = 15;
+        const explosionParticleLifetime = 0.5;
+        const bonusHitParticleLifetimeMultiplier = 1.5;
+        const PARTICLE_POOL_SIZE = 500;
+        let particlePool = [];
+        let explosionParticles = [];
+        let sharedExplosionParticleGeometry;
+        let sharedExplosionParticleMaterial;
+        const reusableParticleDirection = new THREE.Vector3();
+        const BLOOD_COLOR = new THREE.Color(0x8b0000);
+
+        // --- Background Variables ---
+        let backgroundParticles;
+        const backgroundParticleCount = 5000;
+        const backgroundSphereRadius = 500;
+        const backgroundParticleSize = 0.5;
+        const backgroundParticleColor = 0xffffff;
+
+        // --- Audio Variables ---
+        let audioContext;
+        let backgroundMusicBuffer = null;
+        let backgroundMusicSource = null;
+        let backgroundMusicGain = null;
+        const backgroundMusicUrl = 'mixkit-game-level-music-689.wav'; // Ensure this is accessible
+
+        // --- Music Speed Variables ---
+        const musicSpeedMin = 1.0;
+        const musicSpeedMax = 1.5;
+        const gameSpeedForMusicMin = 10;
+        const gameSpeedForMusicMax = 60;
+
+        // --- Voxel Object Variable --- (Ensure voxelData is defined if used)
+        // let voxelData; // Example: { voxelSize: 0.1, voxels: [ { position: [0,0,0] }, ... ] };
+        let voxelObject = null;
+        const destroyedVoxelIndices = new Set();
+        const voxelObjectSpawnZ = -100;
+        const voxelObjectScale = 0.5;
+
+
+        // --- DOM Elements ---
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const speedDisplay = document.getElementById('speedDisplay');
+        const startButton = document.getElementById('startButton');
+        const instructionsBox = document.getElementById('instructions');
+        const pauseButton = document.getElementById('pauseButton');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        const gameOverlay = document.getElementById('gameOverlay');
+        const scoreEffectsOverlay = document.getElementById('scoreEffectsOverlay');
+
+        // --- DOM Update Throttling Variables ---
+        let lastDomUpdateTime = 0;
+        const domUpdateInterval = 100; // Milliseconds
+
+        // --- Speech Synthesis Setup ---
+        let availableVoices = [];
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                availableVoices = window.speechSynthesis.getVoices();
+                console.log("Speech Synthesis voices loaded:", availableVoices);
+                // You can optionally select a default voice here
+                // let defaultVoice = availableVoices.find(voice => voice.lang === 'en-US' && voice.name.includes('Google')); // Example
+                // if (defaultVoice) { console.log("Selected default voice:", defaultVoice.name); }
+            };
+        } else {
+            console.warn("Speech Synthesis not supported in this browser.");
+        }
+
+        function speakMessage(text, rate = 1.0, pitch = 1.0, volume = 1.0) {
+            if ('speechSynthesis' in window && window.speechSynthesis.speaking === false) { // Check if already speaking to avoid queueing too many
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = rate;
+                utterance.pitch = pitch;
+                utterance.volume = volume;
+
+                // Optional: Set a specific voice if available
+                // if (availableVoices.length > 0) {
+                //     // Select a voice, e.g., the first English voice found
+                //     const englishVoice = availableVoices.find(voice => voice.lang.startsWith('en'));
+                //     if (englishVoice) {
+                //         utterance.voice = englishVoice;
+                //     }
+                // }
+
+                window.speechSynthesis.speak(utterance);
+                console.log("Speaking:", text);
+            } else {
+                if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+                     console.log("SpeechSynthesis busy, skipping:", text);
+                }
+            }
+        }
+
+        // Define the array of words to speak on a bonus hit
+        const bonusWords = [
+            "Bonus!", "Slay", "Dispatch", "Eliminate", "Terminate", "Murder", "Assassinate", "Execute",
+            "Slaughter", "Massacre", "Butcher", "Liquidate", "Off", "Waste", "Neutralize", "Fatalize",
+            "Euthanize", "Exterminate", "Annihilate", "Eradicate", "Obliterate", "Extinguish", "Suppress",
+            "Quash", "Smother", "Stifle", "Cancel", "Invalidate", "Nullify", "Poison", "Drown", "Strangle",
+            "Suffocate", "Asphyxiate", "Hang", "Behead", "Decapitate", "Shoot", "Stab", "Burn",
+            "Electrocute", "Stone", "Crucify", "Guillotine", "Bereave", "Extirpate", "Smite", "Defeat",
+            "Vanquish", "Demolish", "Ruin", "Devastate", "Ax", "Decimate", "Mow", "Snuff", "Throttle",
+            "Torpedo", "Zap", "Wreck", "Subdue", "Exscind", "Immolate", "Garrote", "Impale", "Lynch",
+            "Merck", "Mortify", "Pestilence", "Prey", "Repress", "Scourge", "Shatter", "Squelch", "Stun",
+            "Trample", "Vitiate", "Wither", "Zombie"
+        ];
+
+
+        // --- Audio Loading / Playing / Initialization ---
+        async function loadAudio(url) {
+             if (!audioContext) {
+                 console.warn("Audio context not initialized. Cannot load audio.");
+                 return null;
+             }
+             try {
+                 const response = await fetch(url);
+                 if (!response.ok) {
+                     throw new Error(`HTTP error! status: ${response.status} for ${url}`);
+                 }
+                 const arrayBuffer = await response.arrayBuffer();
+                 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                 console.log(`Audio loaded successfully from ${url}`);
+                 return audioBuffer;
+             } catch (error) {
+                 console.error(`Error loading audio from ${url}:`, error);
+                 if (!isGameStarted && instructionsBox.style.display !== 'none') {
+                     instructionsBox.innerHTML += `<p style="color: red; font-size: 0.8em;">Error loading audio: ${error.message}. Game might lack sound.</p>`;
+                 }
+                 return null;
+             }
+           }
+         function playAudioLoop(buffer, gainNode) {
+             if (!buffer || !audioContext || !gainNode) {
+                 console.warn("Cannot play audio loop: missing buffer, context, or gain node.");
+                 return null;
+             }
+             if (backgroundMusicSource) {
+                 try { backgroundMusicSource.stop(); } catch (e) { console.warn("Could not stop previous music source:", e); }
+                 backgroundMusicSource.disconnect();
+             }
+             const source = audioContext.createBufferSource();
+             source.buffer = buffer;
+             source.loop = true;
+             source.connect(gainNode);
+             source.start(0);
+             console.log("Audio loop started.");
+             return source;
+           }
+         async function initializeAudio() {
+             if (audioContext) {
+                   console.log("Audio context already initialized.");
+                  if (audioContext.state === 'suspended') { await audioContext.resume(); }
+                  return;
+              }
+              try {
+                  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                  console.log("Audio context created.");
+                  if (audioContext.state === 'suspended') { await audioContext.resume(); console.log("Audio context resumed."); }
+                  backgroundMusicGain = audioContext.createGain();
+                  backgroundMusicGain.connect(audioContext.destination);
+                  backgroundMusicGain.gain.value = 1.0;
+                  console.log("Attempting to load background music file...");
+                  backgroundMusicBuffer = await loadAudio(backgroundMusicUrl);
+                  console.log("Audio initialization complete.");
+              } catch (error) {
+                  console.error("Error initializing audio context:", error);
+                  if (instructionsBox.style.display !== 'none') {
+                      instructionsBox.innerHTML += `<p style="color: red; font-size: 0.8em;">Error initializing audio: ${error.message}. Game might lack sound.</p>`;
+                  }
+                  audioContext = null;
+              }
+           }
+
+        // --- GLB Model Loading ---
+        function loadGLBModel(url, position, scale, config, onLoadCallback) {
+             console.log(`Attempting to load GLB model from: ${url}`);
+             gltfLoader.load(
+                 url,
+                 function (gltf) {
+                     const model = gltf.scene;
+                     console.log(`GLB model loaded successfully from ${url}:`, model);
+                     model.position.copy(position);
+                     model.scale.copy(scale);
+                     model.userData.config = config;
+                     model.userData.spawnZ = position.z;
+                     model.userData.isRandomModel = true;
+                     scene.add(model);
+                     if (onLoadCallback && typeof onLoadCallback === 'function') {
+                         onLoadCallback(model);
+                     }
+                 },
+                 undefined,
+                 function (error) {
+                     console.error(`An error happened loading GLB model from ${url}:`, error);
+                     if (instructionsBox.style.display !== 'none') {
+                          instructionsBox.innerHTML += `<p style="color: orange; font-size: 0.8em;">Error loading GLB model: ${url}. Object may be missing.</p>`;
+                     }
+                 }
+             );
+           }
+
+        // --- Voxel Object Creation ---
+        function createVoxelsFromData(data) {
+             if (typeof data === 'undefined' || !data || !data.voxels || data.voxels.length === 0) {
+                 console.warn("Voxel data is missing or invalid. Cannot create voxel object.");
+                 return null;
+             }
+             const count = data.voxels.length;
+             const voxelSize = data.voxelSize || 0.1;
+             const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+             const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red material for voxels
+             const mesh = new THREE.InstancedMesh(geometry, material, count);
+             const matrix = new THREE.Matrix4();
+             const redColor = new THREE.Color(0xff0000);
+
+             for (let i = 0; i < count; i++) {
+                 const v = data.voxels[i];
+                 if (!v || !Array.isArray(v.position) || v.position.length < 3) {
+                     console.warn(`Skipping invalid voxel data at index ${i}:`, v);
+                     matrix.identity();
+                     mesh.setMatrixAt(i, matrix);
+                     continue;
+                 }
+                 matrix.setPosition(v.position[0], v.position[1], v.position[2]);
+                 mesh.setMatrixAt(i, matrix);
+                 mesh.setColorAt(i, redColor);
+             }
+
+             mesh.instanceMatrix.needsUpdate = true;
+             if (mesh.instanceColor) {
+                 mesh.instanceColor.needsUpdate = true;
+             }
+             mesh.name = 'voxelObject';
+             mesh.userData.voxelData = data;
+             mesh.userData.voxelSize = voxelSize;
+             console.log(`Created voxel object with ${count} voxels.`);
+             return mesh;
+           }
+
+        // --- Create Cube Tunnel Segment (Local Coords & Initial Placement) ---
+        function createCubeTunnelSegment(segmentIndex) {
+            // Create geometry and material only once
+            if (!cubeGeometry) { cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize); }
+            if (!cubeMaterial) {
+                cubeMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.0 });
+            }
+            const currentTotalCubes = ringCubes * tunnelSegmentLength;
+            const instancedMesh = new THREE.InstancedMesh(cubeGeometry, cubeMaterial, currentTotalCubes);
+
+            // Instance Color setup
+            if (!instancedMesh.instanceColor || instancedMesh.instanceColor.count !== currentTotalCubes) {
+                instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(currentTotalCubes * 3), 3);
+            }
+            instancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage); // Keep dynamic for potential color changes
+            instancedMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage); // Matrices are static relative to object
+
+            let instanceIndex = 0;
+
+            for (let i = 0; i < tunnelSegmentLength; i++) {
+                // Calculate the LOCAL Z position for this ring, relative to the segment's start
+                const localZ = -i * ringSpacing;
+                for (let j = 0; j < ringCubes; j++) {
+                    // Cube placement logic (using Math.random) - using LOCAL coordinates
+                    const angle = Math.random() * Math.PI * 2;
+                    const currentRadius = tunnelRadius + (Math.random() - 0.5) * cubeRandomOffset;
+                    const baseX = Math.cos(angle) * currentRadius;
+                    const baseY = Math.sin(angle) * currentRadius;
+                    const offsetX = (Math.random() - 0.5) * cubeRandomOffset * 0.5;
+                    const offsetY = (Math.random() - 0.5) * cubeRandomOffset * 0.5;
+
+                    // Set LOCAL position and rotation within the InstancedMesh
+                    dummy.position.set(baseX + offsetX, baseY + offsetY, localZ); // Use localZ
+                    dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                    dummy.scale.set(1, 1, 1);
+                    dummy.updateMatrix();
+
+                    instancedMesh.setMatrixAt(instanceIndex, dummy.matrix);
+                    const randomColor = mudColors[Math.floor(Math.random() * mudColors.length)];
+                    instancedMesh.setColorAt(instanceIndex, randomColor);
+
+                    instanceIndex++;
+                }
+            }
+            // Set needsUpdate = true only ONCE after all matrices/colors are initially set
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            instancedMesh.instanceColor.needsUpdate = true;
+
+            // Set the INITIAL WORLD position of the entire segment
+            // Segments are initially placed stretching backward from the origin (where player starts)
+            instancedMesh.position.z = -segmentIndex * segmentTotalLength;
+
+            // Store the starting WORLD Z for tracking
+            instancedMesh.userData = { baseZ: instancedMesh.position.z };
+
+            console.log(`createCubeTunnelSegment: Segment ${segmentIndex} created. Initial world Z: ${instancedMesh.position.z.toFixed(2)}`);
+
+            scene.add(instancedMesh);
+            return instancedMesh;
+        }
+        // --- END MODIFIED createCubeTunnelSegment ---
+
+
+        // --- Outer Tube Creation ---
+        function createOuterTube() {
+             // Calculate a generous tube length based on the total span of all segments + padding
+             const tubeLength = (initialSegmentsCount + 10) * segmentTotalLength; // 5 segment lengths padding on each side
+             console.log(`Creating outer tube with length: ${tubeLength.toFixed(2)}`);
+             if (outerTubeGeometry) outerTubeGeometry.dispose();
+             if (outerTubeMaterial) outerTubeMaterial.dispose();
+             outerTubeGeometry = new THREE.CylinderGeometry(outerTubeRadius, outerTubeRadius, tubeLength, 64, 1, true);
+             outerTubeMaterial = new THREE.MeshStandardMaterial({ color: 0x654321, transparent: true, opacity: 0.6, side: THREE.BackSide });
+             outerTube = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+             outerTube.rotation.x = Math.PI / 2;
+             // Initial position will be set in the animate loop
+             scene.add(outerTube);
+           }
+
+        // --- Pooling Initialization ---
+        function initializeTorpedoPool() {
+             console.log(`Initializing Torpedo Pool (Size: ${TORPEDO_POOL_SIZE})...`);
+             sharedTorpedoGeometry = new THREE.SphereGeometry(0.25, 8, 8);
+             sharedTorpedoMaterial = new THREE.MeshBasicMaterial({ color: 0x756c49 });
+             for (let i = 0; i < TORPEDO_POOL_SIZE; i++) {
+                 const torpedo = new THREE.Mesh(sharedTorpedoGeometry, sharedTorpedoMaterial);
+                 torpedo.visible = false;
+                 torpedo.userData.isActive = false;
+                 torpedo.userData.isTorpedo = true;
+                 torpedoPool.push(torpedo);
+             }
+             console.log("Torpedo Pool Initialized.");
+           }
+        function getTorpedoFromPool() {
+             for (let i = 0; i < torpedoPool.length; i++) {
+                 if (!torpedoPool[i].userData.isActive) {
+                     return torpedoPool[i];
+                 }
+             }
+             console.warn("Torpedo pool exhausted!");
+             return null;
+           }
+        function returnTorpedoToPool(torpedo) {
+             if (!torpedo) return;
+             torpedo.userData.isActive = false;
+             torpedo.visible = false;
+             scene.remove(torpedo);
+           }
+        function initializeParticlePool() {
+              console.log(`Initializing Particle Pool (Size: ${PARTICLE_POOL_SIZE})...`);
+              sharedExplosionParticleGeometry = new THREE.BoxGeometry(cubeSize * 0.5, cubeSize * 0.5, cubeSize * 0.5);
+              sharedExplosionParticleMaterial = new THREE.MeshBasicMaterial({ color: 0xf0a000 });
+              for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+                  const particle = new THREE.Mesh(sharedExplosionParticleGeometry, sharedExplosionParticleMaterial.clone());
+                  particle.visible = false;
+                  particle.userData.isActive = false;
+                  particle.userData.isParticle = true;
+                  particlePool.push(particle);
+              }
+              console.log("Particle Pool Initialized.");
+           }
+        function getParticleFromPool() {
+              for (let i = 0; i < particlePool.length; i++) {
+                  if (!particlePool[i].userData.isActive) {
+                      return particlePool[i];
+                  }
+              }
+              console.warn("Particle pool exhausted!");
+              return null;
+             }
+        function returnParticleToPool(particle) {
+            if (!particle) return;
+            particle.userData.isActive = false;
+            particle.visible = false;
+            if (particle.material.color) {
+              particle.material.color.set(sharedExplosionParticleMaterial.color);
+            }
+            scene.remove(particle);
+        }
+
+        // --- Torpedo/Particle Creation/Updates ---
+        function createTorpedo() {
+             const torpedo = getTorpedoFromPool();
+             if (!torpedo) {
+                console.warn("Failed to get torpedo from pool.");
+                return;
+             }
+             camera.getWorldPosition(torpedo.position);
+             camera.getWorldDirection(reusableTorpedoDirection);
+             torpedo.userData.direction = reusableTorpedoDirection.clone();
+             torpedo.userData.speed = gameSpeed + torpedoRelativeSpeed;
+             torpedo.userData.spawnTime = performance.now();
+             torpedo.userData.isActive = true;
+             torpedo.visible = true;
+             scene.add(torpedo);
+             activeTorpedos.push(torpedo);
+             console.log("Torpedo created at:", torpedo.position);
+           }
+        function createExplosionParticles(position, isBonusHit = false) {
+             const count = isBonusHit ? explosionParticleCount * bonusHitParticleMultiplier : explosionParticleCount;
+             const lifetime = isBonusHit ? explosionParticleLifetime * bonusHitParticleLifetimeMultiplier : explosionParticleLifetime;
+             const speedMultiplier = isBonusHit ? 1.5 : 1.0;
+
+             for (let i = 0; i < count; i++) {
+                 const particle = getParticleFromPool();
+                 if (!particle) {
+                    console.warn("Failed to get particle from pool.");
+                    continue;
+                 }
+                 particle.position.copy(position);
+                 if (isBonusHit) {
+                     particle.material.color.set(BLOOD_COLOR);
+                 } else {
+                     particle.material.color.set(sharedExplosionParticleMaterial.color);
+                 }
+                 reusableParticleDirection.set(
+                     (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2
+                 ).normalize();
+                 particle.userData.direction = reusableParticleDirection.clone();
+                 particle.userData.speed = Math.random() * explosionParticleSpeed * speedMultiplier;
+                 particle.userData.spawnTime = performance.now();
+                 particle.userData.lifetime = lifetime * 1000;
+                 particle.userData.isActive = true;
+                 particle.visible = true;
+                 scene.add(particle);
+                 explosionParticles.push(particle);
+             }
+             console.log(`Created ${count} explosion particles at:`, position);
+           }
+        function showScoreEffect(position3D, scoreText) {
+             if (!scoreEffectsOverlay) return;
+             // Convert 3D world position to 2D screen position
+             const pos = position3D.clone();
+             pos.project(camera);
+
+             // Check if the point is behind the camera
+             if (pos.z > 1) return;
+
+             const widthHalf = window.innerWidth / 2;
+             const heightHalf = window.innerHeight / 2;
+
+             const screenX = (pos.x * widthHalf) + widthHalf;
+             const screenY = -(pos.y * heightHalf) + heightHalf; // Invert Y axis
+
+             const popup = document.createElement('div');
+             popup.classList.add('score-popup');
+             popup.textContent = scoreText;
+             popup.style.left = `${screenX}px`;
+             popup.style.top = `${screenY}px`;
+
+             // Change color for negative scores
+             if (scoreText.startsWith('-')) {
+                 popup.style.color = '#ff4d4d'; // Reddish for penalty
+             }
+
+
+             scoreEffectsOverlay.appendChild(popup);
+
+             // Trigger animation
+             requestAnimationFrame(() => {
+                 // Small delay to allow DOM to update before adding 'show' class
+                 requestAnimationFrame(() => {
+                     popup.classList.add('show');
+                 });
+             });
+
+             // Remove after animation
+             setTimeout(() => {
+                 popup.classList.add('fade-out');
+                 // Wait for fade-out transition to finish before removing from DOM
+                 setTimeout(() => {
+                     if (popup.parentNode === scoreEffectsOverlay) {
+                         scoreEffectsOverlay.removeChild(popup);
+                     }
+                 }, 1500); // Match CSS transition duration
+             }, 100); // Delay before starting fade-out, allows 'show' transition
+           }
+        function onLeftMouseClick(event) {
+             if (!isGameStarted || isPaused || document.pointerLockElement !== canvas || event.button !== 0) {
+                 console.log("Click ignored: Game not started, paused, not pointer locked, or not left click.");
+                 return;
+             }
+             console.log("Left mouse click - attempting to create torpedo.");
+             createTorpedo();
+           }
+        function createBackgroundParticles() {
+            console.log("Creating background particles...");
+            const vertices = [];
+            const geometry = new THREE.BufferGeometry();
+            for (let i = 0; i < backgroundParticleCount; i++) {
+                 // Sphere distribution (using spherical coordinates)
+                 const phi = Math.random() * Math.PI * 2; // Azimuthal angle
+                 const theta = Math.random() * Math.PI; // Polar angle
+                 const radius = backgroundSphereRadius * (Math.random() * 0.5 + 0.5); // Distribute points within a range
+
+                 const x = radius * Math.sin(theta) * Math.cos(phi);
+                 const y = radius * Math.sin(theta) * Math.sin(phi);
+                 const z = radius * Math.cos(theta); // Z is usually up in spherical, but we'll use it as forward/backward
+
+                 vertices.push(x, y, z);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+            const material = new THREE.PointsMaterial({
+                 color: backgroundParticleColor,
+                 size: backgroundParticleSize,
+                 sizeAttenuation: true,
+                 transparent: true,
+                 opacity: 0.8,
+                 alphaTest: 0.5 // Prevent rendering fully transparent pixels
+            });
+
+            backgroundParticles = new THREE.Points(geometry, material);
+            // Position particles behind the initial player position
+            backgroundParticles.position.z = -backgroundSphereRadius * 0.8;
+            scene.add(backgroundParticles);
+            console.log("Background particles created.");
+           }
+
+        // --- initializeGameElements (Sets up initial segments) ---
+        function initializeGameElements() {
+             console.log(`Initializing game elements...`);
+
+             // Dispose of existing tunnel segments
+             tunnelSegments.forEach(segment => {
+                 if (segment) {
+                     scene.remove(segment);
+                     // Optional: Dispose geometry and materials if they are not shared and might be large
+                     // For InstancedMesh with shared geo/material, disposal might not be necessary here.
+                     // If createCubeTunnelSegment used unique geo/mat per segment, dispose them here.
+                     // if (segment.geometry) segment.geometry.dispose(); // Only if not shared
+                     // if (segment.material && !Array.isArray(segment.material)) segment.material.dispose(); // Only if not shared
+                     // if (segment.instanceColor) segment.instanceColor.dispose();
+                     // if (segment.instanceMatrix) segment.instanceMatrix.dispose();
+                 } else {
+                    console.warn("Attempted to dispose of an invalid segment.");
+                 }
+             });
+             tunnelSegments = [];
+             console.log(`Creating initial ${initialSegmentsCount} tunnel segments...`);
+             // Create initial segments stretching backward from the origin (where player starts)
+             for (let i = 0; i < initialSegmentsCount; i++) {
+                 const newSegment = createCubeTunnelSegment(i); // createCubeTunnelSegment positions them based on index
+                 tunnelSegments.push(newSegment);
+             }
+             console.log(`initializeGameElements: Created ${tunnelSegments.length} initial tunnel segments.`);
+
+             // Find the initial furthest ahead Z (most negative Z) of the segment origins
+             currentFurthestAheadZ = tunnelSegments.reduce((minZ, segment) => {
+                 return Math.min(minZ, segment.position.z);
+             }, Infinity);
+             console.log(`Initial furthest ahead Z: ${currentFurthestAheadZ.toFixed(2)}`);
+
+
+             // Outer Tube (dispose and recreate)
+             if (outerTube) { console.log("Removing existing outer tube."); scene.remove(outerTube); if (outerTubeGeometry) outerTubeGeometry.dispose(); if (outerTubeMaterial) outerTubeMaterial.dispose(); outerTube = null; }
+             createOuterTube(); // Outer tube position will be updated in the animate loop
+
+             // Background Particles (create if not exists, reposition if exists)
+             if (!backgroundParticles) { createBackgroundParticles(); }
+             else { backgroundParticles.position.z = -backgroundSphereRadius * 0.8; console.log("Background particles repositioned."); } // Reset background position
+
+             // Voxel Object (dispose and recreate if voxelData exists)
+             if (voxelObject) { console.log("Removing existing voxel object."); scene.remove(voxelObject); /* TODO: dispose voxelObject geometry/material */ voxelObject = null; }
+             destroyedVoxelIndices.clear();
+             if (typeof voxelData !== 'undefined' && voxelData) { // Check if voxelData is defined globally
+                 console.log("Attempting to create voxel object from data.");
+                 voxelObject = createVoxelsFromData(voxelData);
+                 if (voxelObject) {
+                     // Position and scale voxel object if created
+                     voxelObject.position.set(0, 0, voxelObjectSpawnZ);
+                     voxelObject.scale.set(voxelObjectScale, voxelObjectScale, voxelObjectScale);
+                     scene.add(voxelObject);
+                     console.log("Voxel object added to scene.");
+                 } else {
+                    console.warn("Failed to create voxel object from data.");
+                 }
+             } else {
+                console.log("No voxel data found, skipping voxel object creation.");
+             }
+
+             // Random Models (remove all existing ones)
+             activeRandomModels.forEach(model => {
+                 if (model) {
+                     console.log("Removing existing random model:", model);
+                     scene.remove(model);
+                     // Optional: Dispose model geometry/materials if they are unique to this model
+                 } else {
+                    console.warn("Attempted to remove an invalid random model.");
+                 }
+             });
+             activeRandomModels = [];
+             // Reset spawn position for random models
+             const initialPlayerZ = controls ? controls.getObject().position.z : 0;
+             nextModelSpawnZ = initialPlayerZ - modelSpawnFrequency;
+             console.log(`Resetting random model spawn Z to: ${nextModelSpawnZ}`);
+
+
+             // Clear active torpedos and particles (return to pools)
+             activeTorpedos.forEach(returnTorpedoToPool);
+             activeTorpedos = [];
+             explosionParticles.forEach(returnParticleToPool);
+             explosionParticles = [];
+             console.log("Cleared active torpedos and particles.");
+
+             console.log("Game elements initialization complete.");
+           }
+
+
+        // --- Resize Handler ---
+        function resizeRendererToDisplaySize(renderer) {
+             const canvas = renderer.domElement;
+             const width = window.innerWidth;
+             const height = window.innerHeight;
+             const needResize = canvas.width !== width || canvas.height !== height;
+             if (needResize) {
+                 renderer.setSize(width, height, false);
+                 camera.aspect = width / height;
+                 camera.updateProjectionMatrix();
+
+                 // Also update render target size for pixelation if needed (optional based on effect)
+                 // renderTarget.setSize(width / pixelRatio, height / pixelRatio); // If pixelRatio is used
+                 renderTarget.setSize(renderTargetWidth, renderTargetHeight); // Keep fixed pixelation
+                 console.log(`Resized renderer to ${width}x${height}. Render target to ${renderTargetWidth}x${renderTargetHeight}.`);
+             }
+             return needResize;
+           }
+
+        // --- updateCameraPosition ---
+        function updateCameraPosition(deltaTime) {
+             const playerPosition = controls.getObject().position;
+             playerPosition.z -= gameSpeed * deltaTime; // Move camera in negative Z
+
+             // Move background particles slightly slower than the camera for parallax effect
+             if (backgroundParticles) {
+                 backgroundParticles.position.z -= gameSpeed * deltaTime * 0.1; // Adjust multiplier for effect
+
+                 // Wrap background particles around player
+                 const cameraZ = playerPosition.z;
+                 const backgroundRelativeZ = backgroundParticles.position.z - cameraZ;
+                 const wrapDistance = backgroundSphereRadius * 2.0; // Total size of the sphere along Z
+
+                 // If background moves too far behind the player, wrap it forward
+                 if (backgroundRelativeZ > backgroundSphereRadius) {
+                     backgroundParticles.position.z -= wrapDistance;
+                     console.log(`Background particles wrapped forward. New Z: ${backgroundParticles.position.z.toFixed(2)}`);
+                 }
+                 // If background moves too far ahead of the player, wrap it backward (less common in a forward-moving game)
+                 else if (backgroundRelativeZ < -backgroundSphereRadius) {
+                      backgroundParticles.position.z += wrapDistance;
+                      console.log(`Background particles wrapped backward. New Z: ${backgroundParticles.position.z.toFixed(2)}`);
+                 }
+             }
+
+             // Outer tube position is now updated in the animate loop based on segment positions
+           }
+
+         // --- Game Speed and Music Update ---
+         function updateGameSpeed(deltaTime) {
+              gameSpeed += 0.15 * deltaTime; // Increase speed over time
+
+              // Update music playback rate based on game speed
+              if (backgroundMusicSource && backgroundMusicSource.playbackRate && audioContext && audioContext.state === 'running') {
+                  const playbackRate = THREE.MathUtils.mapLinear(gameSpeed, gameSpeedForMusicMin, gameSpeedForMusicMax, musicSpeedMin, musicSpeedMax);
+                  backgroundMusicSource.playbackRate.value = THREE.MathUtils.clamp(playbackRate, musicSpeedMin, musicSpeedMax);
+                  // console.log(`Game Speed: ${gameSpeed.toFixed(1)}, Music Playback Rate: ${backgroundMusicSource.playbackRate.value.toFixed(2)}`); // Optional: very frequent log
+              }
+          }
+
+        // --- checkAndRegenerateTunnel ---
+        // This function recycles tunnel segments that are behind the player
+        // and moves them ahead of the furthest current segment to create continuity.
+        function checkAndRegenerateTunnel() {
+            const playerZ = controls.getObject().position.z;
+            // console.log(`--- Entering checkAndRegenerateTunnel --- Player Z: ${playerZ.toFixed(2)}`); // Optional: very frequent log
+
+            // Find the Z position of the segment currently furthest ahead of the player
+            let furthestAheadZ = Infinity; // Smallest (most negative) Z of a segment origin
+             // console.log(`checkAndRegenerateTunnel: Finding furthest ahead Z among ${tunnelSegments.length} segments...`); // Optional: infrequent log
+            for (const segment of tunnelSegments) {
+                 if (segment && typeof segment.position.z === 'number') {
+                     if (segment.position.z < furthestAheadZ) {
+                         furthestAheadZ = segment.position.z;
+                     }
+                 } else {
+                     console.error(`checkAndRegenerateTunnel: Invalid segment found during furthestAheadZ check!`, segment);
+                 }
+            }
+             // console.log(`checkAndRegenerateTunnel: Furthest ahead Z found: ${furthestAheadZ.toFixed(2)}`); // Optional: infrequent log
+
+
+            const segmentsToRecycle = [];
+             // Trigger recycling if the segment's origin is behind the player + threshold
+             const recycleThresholdZ = playerZ + distanceToRecycleBehindPlayer;
+             // console.log(`checkAndRegenerateTunnel: Checking segments for recycling (threshold > ${recycleThresholdZ.toFixed(2)})...`); // Optional: infrequent log
+            for (let i = 0; i < tunnelSegments.length; i++) {
+                 const segment = tunnelSegments[i];
+                 if (!segment || !segment.userData || typeof segment.position.z !== 'number') {
+                     console.error(`checkAndRegenerateTunnel: Invalid segment [${i}] in recycling check loop!`, segment);
+                     continue;
+                 }
+
+                 // Check if the segment's starting world Z position is too far behind the player
+                 if (segment.position.z > recycleThresholdZ) {
+                     // console.log(`checkAndRegenerateTunnel: Segment ${i} identified for recycling. Current Z: ${segment.position.z.toFixed(2)}`); // Optional: very frequent log
+                     segmentsToRecycle.push(segment);
+                 } // else { console.log(`checkAndRegenerateTunnel: Segment ${i} not behind threshold. Z: ${segment.position.z.toFixed(2)}`); } // Optional: very noisy log
+            }
+             if (segmentsToRecycle.length > 0) { console.log(`checkAndRegenerateTunnel: Found ${segmentsToRecycle.length} segments to recycle.`); }
+
+
+            for (const segment of segmentsToRecycle) {
+                 // Calculate the new Z position to place it immediately after the current furthest segment
+                 const newZ = furthestAheadZ - segmentTotalLength;
+
+                 // console.log(`checkAndRegenerateTunnel: Recycling segment. Old Z: ${segment.position.z.toFixed(2)}. New Z will be ${newZ.toFixed(2)} (FurthestAheadZ ${furthestAheadZ.toFixed(2)} - SegmentLength ${segmentTotalLength.toFixed(2)})`); // Optional: very frequent log
+
+                 // Update the segment's world position
+                 segment.position.z = newZ;
+
+                 // Update the tracked baseZ (optional but good practice)
+                 segment.userData.baseZ = newZ;
+
+                 // Update the segment's world matrix immediately
+                 segment.updateMatrixWorld(true);
+
+                 // Update the furthestAheadZ global variable if this segment is now the furthest ahead
+                 if (newZ < currentFurthestAheadZ) {
+                     currentFurthestAheadZ = newZ;
+                     // console.log(`checkAndRegenerateTunnel: Updated currentFurthestAheadZ to ${currentFurthestAheadZ.toFixed(2)} after recycling.`); // Optional log
+                 }
+
+                 // console.log(`checkAndRegenerateTunnel: Segment successfully recycled and repositioned.`); // Optional: very frequent log
+            }
+             // console.log(`--- Exiting checkAndRegenerateTunnel ---`); // Optional: very frequent log
+        }
+        // --- END checkAndRegenerateTunnel ---
+
+
+        // --- Model Spawning/Cleanup ---
+        function checkAndSpawnModel() {
+             const cameraZ = controls.getObject().position.z;
+             if (modelConfigs.length > 0 && cameraZ < nextModelSpawnZ) {
+                 console.log(`Spawning new random model at Z: ${cameraZ - modelSpawnDistance.toFixed(2)}`);
+                 const configIndex = Math.floor(Math.random() * modelConfigs.length);
+                 const config = modelConfigs[configIndex];
+
+                 // Spawn position ahead of the player
+                 const spawnZ = cameraZ - modelSpawnDistance;
+
+                 // Random position within the tunnel radius, slightly offset
+                 const angle = Math.random() * Math.PI * 2;
+                 const radiusOffset = (Math.random() * 0.7 + 0.3) * tunnelRadius; // Spawn between 30%-100% of tunnel radius
+                 const spawnX = Math.cos(angle) * radiusOffset;
+                 const spawnY = Math.sin(angle) * radiusOffset + (config.yOffset || 0); // Apply model-specific Y offset
+
+                 const spawnPosition = new THREE.Vector3(spawnX, spawnY, spawnZ);
+
+                 loadGLBModel(config.url, spawnPosition, config.scale, config, (loadedModel) => {
+                      if (loadedModel) {
+                           activeRandomModels.push(loadedModel);
+                           console.log("Model added to activeRandomModels:", loadedModel);
+                      } else {
+                           console.warn(`loadGLBModel callback received invalid model`);
+                      }
+                 });
+
+                 // Schedule the next model spawn
+                 nextModelSpawnZ = cameraZ - modelSpawnFrequency * (0.8 + Math.random() * 0.4); // Randomize frequency slightly
+                 console.log(`Next model spawn scheduled at Z: ${nextModelSpawnZ.toFixed(2)}`);
+             }
+           }
+        function cleanupRandomModels() {
+             // Clean up models that are now far behind the player
+             const cleanupThreshold = controls.getObject().position.z + modelCleanupDistance;
+             for (let i = activeRandomModels.length - 1; i >= 0; i--) {
+                 const model = activeRandomModels[i];
+                 if (model && model.position.z > cleanupThreshold) {
+                     console.log("Cleaning up old random model:", model);
+                     scene.remove(model);
+                     // TODO: Dispose geometry and materials if they are unique to this model
+                     activeRandomModels.splice(i, 1);
+                 }
+             }
+           }
+        // --- Player Collision Check ---
+         function checkPlayerCollisions() {
+             const playerPosition = controls.getObject().position;
+             let playerHitPenaltyThisFrame = 0;
+
+             // Check collision with random models
+             for (let i = activeRandomModels.length - 1; i >= 0; i--) {
+                 const model = activeRandomModels[i];
+                 if (!model || !model.userData.isRandomModel) continue;
+
+                 const modelWorldPosition = new THREE.Vector3(); // Get world pos in case model is parented
+                 model.getWorldPosition(modelWorldPosition);
+
+                 const modelBoundingRadius = (Math.max(model.scale.x, model.scale.y, model.scale.z) || 1.0);
+                 const collisionDistance = PLAYER_COLLISION_RADIUS + modelBoundingRadius;
+
+                 if (playerPosition.distanceTo(modelWorldPosition) < collisionDistance) { // Use world position
+                      console.log(">>> PLAYER COLLIDED with model!", model.userData.config?.url);
+                      playerHitPenaltyThisFrame = PLAYER_HIT_PENALTY;
+                      showScoreEffect(modelWorldPosition, `-${PLAYER_HIT_PENALTY.toLocaleString()}`); // Use world position for effect
+                      speakMessage("Penalty!"); // Announce penalty
+                      scene.remove(model); /* TODO: Dispose */ activeRandomModels.splice(i, 1);
+                      break; // Assume only one model collision per frame for simplicity
+                 }
+             }
+
+             // Check collision with tunnel cubes (More complex due to InstancedMesh)
+             // Iterate through each segment
+             for (const segment of tunnelSegments) {
+                 if (!segment || typeof segment.count !== 'number') continue;
+
+                 const instanceCount = segment.count;
+                 const scaleMatrix = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+                 const checkScale = new THREE.Vector3();
+
+                 // Iterate through each instance (cube) in the segment
+                 for (let k = 0; k < instanceCount; k++) {
+                     segment.getMatrixAt(k, tempMatrix); // Get local matrix for the instance
+
+                     // Decompose local matrix to check scale - skip if already shrunk (destroyed)
+                     tempMatrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), checkScale);
+                     if (checkScale.x < 0.1) continue;
+
+                     // Get the world position of the cube instance
+                     dummy.position.setFromMatrixPosition(tempMatrix); // Get local position
+                     dummy.position.applyMatrix4(segment.matrixWorld); // Convert to world position
+
+                     // Check distance to the player's position
+                     if (playerPosition.distanceTo(dummy.position) < cubeSize * 1.5) { // Simple sphere-to-sphere check
+                          console.log(">>> PLAYER COLLIDED with tunnel cube!");
+                          playerHitPenaltyThisFrame = PLAYER_HIT_PENALTY; // Apply penalty
+
+                          // Shrink the hit cube locally within the instance matrix
+                          segment.setMatrixAt(k, scaleMatrix);
+                          segment.instanceMatrix.needsUpdate = true; // Mark for update
+
+                          showScoreEffect(dummy.position.clone(), `-${PLAYER_HIT_PENALTY.toLocaleString()}`); // Show effect at cube's world position
+                          speakMessage("Penalty!"); // Announce penalty
+
+                          // Optionally create particles at the collision point
+                          createExplosionParticles(dummy.position.clone(), false);
+
+                          return playerHitPenaltyThisFrame; // Only apply one player hit penalty per frame
+                      }
+                  }
+              }
+
+              // Check collision with voxel object (if it exists and is not destroyed)
+               if (voxelObject && voxelObject.userData.voxelData) {
+                  const voxelSize = voxelObject.userData.voxelSize || 0.1;
+                  const voxelInstanceCount = voxelObject.count;
+                  const scaleMatrix = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+                  const checkScale = new THREE.Vector3();
+
+                  for (let i = 0; i < voxelInstanceCount; i++) {
+                      // Skip if this voxel was already destroyed
+                      if (destroyedVoxelIndices.has(i)) continue;
+
+                      voxelObject.getMatrixAt(i, tempMatrix); // Local matrix
+
+                      // Decompose local matrix to check scale - skip if already shrunk
+                      tempMatrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), checkScale);
+                      if (checkScale.x < 0.1) continue; // Already destroyed
+
+                      // Get world position of the voxel instance
+                      dummy.position.setFromMatrixPosition(tempMatrix); // Local position
+                      dummy.position.applyMatrix4(voxelObject.matrixWorld); // World position
+
+                       if (playerPosition.distanceTo(dummy.position) < voxelSize * 1.5) { // Simple sphere-to-sphere check
+                           console.log(">>> PLAYER COLLIDED with voxel!");
+                           playerHitPenaltyThisFrame = PLAYER_HIT_PENALTY;
+
+                           // Shrink the hit voxel locally
+                           voxelObject.setMatrixAt(i, scaleMatrix);
+                           if (voxelObject.instanceMatrix) voxelObject.instanceMatrix.needsUpdate = true;
+                           destroyedVoxelIndices.add(i);
+                           console.log("Destroyed voxel index:", i);
+
+                           showScoreEffect(dummy.position.clone(), `-${PLAYER_HIT_PENALTY.toLocaleString()}`);
+                           speakMessage("Penalty!"); // Announce penalty
+                           createExplosionParticles(dummy.position.clone(), true); // Use bonus particles for voxels?
+
+                           return playerHitPenaltyThisFrame; // Only one hit per frame
+                       }
+                   }
+               }
+
+
+             return playerHitPenaltyThisFrame; // Return total penalty for the frame
+           }
+
+        // --- Torpedo/Particle Update Functions ---
+        function updateTorpedos(deltaTime) {
+             const currentTime = performance.now();
+             const torpedosToRemoveIndices = [];
+             const scaleMatrix = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+             const checkScale = new THREE.Vector3();
+             let frameBonusScoreDelta = 0; // Initialized to 0
+             let hitModelIndexToRemove = -1;
+
+             for (let i = activeTorpedos.length - 1; i >= 0; i--) {
+                 const torpedo = activeTorpedos[i];
+                 if (!torpedo || !torpedo.userData.isActive) {
+                     torpedosToRemoveIndices.push(i); continue;
+                 }
+
+                 let torpedoHit = false; let hitModel = false; let currentHitModelIndex = -1; let hitPosition = null;
+
+                 if (torpedo.userData.direction && typeof torpedo.userData.speed === 'number') {
+                     torpedo.position.addScaledVector(torpedo.userData.direction, torpedo.userData.speed * deltaTime);
+                 }
+                 const expired = currentTime - torpedo.userData.spawnTime > torpedoLifetime * 1000;
+
+                 if (!expired) {
+                     // GLB Model Collision
+                     for (let j = activeRandomModels.length - 1; j >= 0; j--) {
+                          if (hitModelIndexToRemove === j) continue; // Prevent hitting a model already marked for removal
+                          const model = activeRandomModels[j];
+                          if (model && model.userData.isRandomModel) {
+                              // Get model's world position in case it's parented
+                              const modelWorldPosition = new THREE.Vector3();
+                              model.getWorldPosition(modelWorldPosition);
+
+                              const modelBoundingRadius = (Math.max(model.scale.x, model.scale.y, model.scale.z) || 1.0);
+                              const collisionDistance = 0.25 + modelBoundingRadius; // Torpedo radius + Model rough bounding radius
+
+                              if (torpedo.position.distanceTo(modelWorldPosition) < collisionDistance) {
+                                   console.log("Torpedo hit model:", model.userData.config?.url);
+                                  torpedoHit = true; hitModel = true; currentHitModelIndex = j; hitPosition = modelWorldPosition.clone(); break;
+                              }
+                          }
+                     }
+                     // Tunnel Cube Collision
+                     if (!torpedoHit) {
+                          for (let j = 0; j < tunnelSegments.length; j++) {
+                              const segment = tunnelSegments[j];
+                              if (!segment || typeof segment.count !== 'number') {
+                                  console.error(`Invalid segment [${j}] during torpedo collision check!`, segment);
+                                  continue;
+                              }
+                              const instanceCount = segment.count;
+                              for (let k = 0; k < instanceCount; k++) {
+                                  segment.getMatrixAt(k, tempMatrix); // Get local matrix
+                                  // Convert local cube position to world position for collision check
+                                  dummy.position.setFromMatrixPosition(tempMatrix); // Get local position
+                                  dummy.position.applyMatrix4(segment.matrixWorld); // Convert to world position
+
+                                  // Decompose local matrix to check scale - skip if already shrunk
+                                  tempMatrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), checkScale);
+                                  if (checkScale.x < 0.1) continue;
+
+                                  if (torpedo.position.distanceTo(dummy.position) < cubeSize * 1.5) { // Check against world position
+                                       console.log("Torpedo hit tunnel cube.");
+                                       torpedoHit = true;
+                                       hitPosition = torpedo.position.clone();
+
+                                       // Apply explosion damage - Check other cubes in all segments vs hitPosition (world)
+                                       for (let segIdx = 0; segIdx < tunnelSegments.length; segIdx++) {
+                                           const expSeg = tunnelSegments[segIdx];
+                                           if (!expSeg || typeof expSeg.count !== 'number') {
+                                               console.error(`Invalid segment [${segIdx}] during explosion damage application!`, expSeg);
+                                               continue;
+                                           }
+                                           const expCount = expSeg.count;
+                                           let segmentNeedsMatrixUpdate = false; // Flag for this segment
+                                           for (let instIdx = 0; instIdx < expCount; instIdx++) {
+                                               expSeg.getMatrixAt(instIdx, tempMatrix); // Local matrix
+                                               tempMatrix.decompose(new THREE.Vector3(), new THREE.Quaternion(), checkScale); // Decompose local matrix
+                                               if (checkScale.x < 0.1) continue; // Already destroyed
+
+                                               dummy.position.setFromMatrixPosition(tempMatrix); // Local position
+                                               dummy.position.applyMatrix4(expSeg.matrixWorld); // World position
+
+                                               if (dummy.position.distanceTo(hitPosition) < explosionRadius) { // World position check
+                                                   // Shrink the hit cube by setting its LOCAL matrix
+                                                   expSeg.setMatrixAt(instIdx, scaleMatrix);
+                                                   segmentNeedsMatrixUpdate = true;
+                                               }
+                                           }
+                                           if (segmentNeedsMatrixUpdate) {
+                                               expSeg.instanceMatrix.needsUpdate = true; // Mark matrix buffer for update
+                                           }
+                                       }
+                                       break; // Exit instance loop after explosion damage calculation
+                                   }
+                               }
+                               if (torpedoHit) break; // Exit segment loop
+                           }
+                     }
+                      // Voxel Collision (Needs similar world position conversion if voxelObject exists)
+                       if (!torpedoHit && voxelObject && voxelObject.userData.voxelData && !destroyedVoxelIndices.has(i)) {
+                          // ... voxel collision logic using voxelObject.getMatrixAt(index, tempMatrix)
+                          // then convert dummy.position.setFromMatrixPosition(tempMatrix).applyMatrix4(voxelObject.matrixWorld);
+                          // and check distance to torpedo.position ...
+                          // if hit, mark index in destroyedVoxelIndices and set its matrix to scaleMatrix
+                       }
+                 }
+
+                 if (torpedoHit || expired) {
+                     torpedosToRemoveIndices.push(i);
+                     if (expired) { console.log("Torpedo expired:", torpedo); }
+                     if (torpedoHit && hitPosition) {
+                         if (hitModel) {
+                            console.log("Bonus Hit!");
+                            frameBonusScoreDelta += HIT_BONUS;
+                            showScoreEffect(hitPosition, "1 Million");
+                            createExplosionParticles(hitPosition, true);
+                            if (hitModelIndexToRemove === -1) hitModelIndexToRemove = currentHitModelIndex;
+                            else console.warn(`Multiple models hit in one frame`);
+
+                            // Select a random word from the bonusWords array and speak it
+                            const randomWord = bonusWords[Math.floor(Math.random() * bonusWords.length)];
+                            speakMessage(randomWord); // Speak the random word
+
+                         }
+                     }
+                 }
+             }
+             // Model Removal
+             if (hitModelIndexToRemove !== -1) {
+                 if (hitModelIndexToRemove >= 0 && hitModelIndexToRemove < activeRandomModels.length) {
+                     const modelToRemove = activeRandomModels[hitModelIndexToRemove];
+                     if (modelToRemove) { console.log("Removing hit model:", modelToRemove); scene.remove(modelToRemove); /* TODO: Dispose model geometry/materials? */ activeRandomModels.splice(hitModelIndexToRemove, 1); }
+                     else { console.warn(`Attempted to remove undefined model at index ${hitModelIndexToRemove}`); }
+                 } else { console.warn(`Invalid index to remove model: ${hitModelIndexToRemove}`); }
+             }
+             // Torpedo Cleanup
+             torpedosToRemoveIndices.sort((a, b) => b - a); // Sort descending to remove without affecting indices
+             for (const index of torpedosToRemoveIndices) {
+                 if (index >= 0 && index < activeTorpedos.length) {
+                     const torpedo = activeTorpedos[index]; if (torpedo) returnTorpedoToPool(torpedo); activeTorpedos.splice(index, 1);
+                 } else { console.warn(`Invalid index to remove torpedo: ${index}`); }
+              }
+              console.log(`updateTorpedos returning frameBonusScoreDelta: ${frameBonusScoreDelta}`);
+             return frameBonusScoreDelta;
+           }
+        function updateExplosionParticles(deltaTime) {
+              const currentTime = performance.now();
+              const particlesToRemoveIndices = [];
+              for (let i = explosionParticles.length - 1; i >= 0; i--) {
+                  const particle = explosionParticles[i];
+                  if (!particle || !particle.userData.isActive) { particlesToRemoveIndices.push(i); continue; }
+                  if (particle.userData.direction && particle.userData.speed) { particle.position.addScaledVector(particle.userData.direction, particle.userData.speed * deltaTime); }
+                  if (currentTime - particle.userData.spawnTime > particle.userData.lifetime) { particlesToRemoveIndices.push(i); }
+              }
+              particlesToRemoveIndices.sort((a, b) => b - a);
+              for (const index of particlesToRemoveIndices) {
+                 if (index >= 0 && index < explosionParticles.length) {
+                     const particle = explosionParticles[index]; if (particle) returnParticleToPool(particle); explosionParticles.splice(index, 1);
+                 } else { console.warn(`Invalid index to remove particle: ${index}`); }
+              }
+           }
+
+
+        // --- Animation Loop ---
+        function animate() {
+             if (!isGameStarted || isPaused) {
+                 if(animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; console.log("Animation loop stopped."); }
+                 return;
+             }
+             animationFrameId = requestAnimationFrame(animate);
+             frameCounter++;
+
+             try {
+                 const currentTime = performance.now();
+                 // Calculate delta time in seconds, cap at 0.1 to prevent large jumps on lag spikes
+                 const deltaTime = Math.min(0.1, (currentTime - previousTime) / 1000);
+                 previousTime = currentTime;
+                 console.log(`Animate frame ${frameCounter}: deltaTime = ${deltaTime}`);
+
+                 const playerPosition = controls.getObject().position;
+                 // console.log(`--- Animate Frame ${frameCounter} --- deltaTime: ${deltaTime.toFixed(3)}, Player Z: ${playerPosition.z.toFixed(2)}, Game Speed: ${gameSpeed.toFixed(1)}`); // Optional: extremely frequent log
+
+
+                 resizeRendererToDisplaySize(renderer);
+                 updateCameraPosition(deltaTime); // This updates playerPosition.z
+                 updateGameSpeed(deltaTime); // This is the line from your log: tunnel.html:1296
+
+                 // Update world matrices for objects that moved (like segments being recycled)
+                 // This is crucial before collision checks.
+                 scene.updateMatrixWorld();
+                 // console.log(`Animate: scene.updateMatrixWorld() called.`); // Optional: very frequent log
+
+
+                 // Update outer tube position to stay centered on the tunnel segments
+                 if (outerTube && tunnelSegments.length > 0) { // Ensure segments exist
+                     // The total span of the active segments is initialSegmentsCount * segmentTotalLength.
+                     // The segments run from currentFurthestAheadZ (most negative Z) to currentFurthestAheadZ + (initialSegmentsCount - 1) * segmentTotalLength.
+                     // The center is at currentFurthestAheadZ + half of the total span.
+                     const totalSegmentsSpan = initialSegmentsCount * segmentTotalLength;
+                     const centerSegmentZ = currentFurthestAheadZ + totalSegmentsSpan / 2;
+                     outerTube.position.z = centerSegmentZ;
+                     // console.log(`Outer Tube positioned at Z: ${outerTube.position.z.toFixed(2)} (FurthestAheadZ: ${currentFurthestAheadZ.toFixed(2)}, Span: ${totalSegmentsSpan.toFixed(2)})`); // Optional log
+                 }
+
+
+                 const playerPenalty = checkPlayerCollisions();
+                 const bonusScoreDelta = updateTorpedos(deltaTime); // Torpedo collisions update matrices internally
+                 updateExplosionParticles(deltaTime);
+
+                 console.log(`Before score update: score=${score}, gameSpeed=${gameSpeed}, deltaTime=${deltaTime}, bonusScoreDelta=${bonusScoreDelta}, playerPenalty=${playerPenalty}`);
+                 score += (gameSpeed * deltaTime * 10) + bonusScoreDelta - playerPenalty; // Score based on distance and hits
+                 score = Math.max(0, score); // Score cannot go below zero
+                 console.log(`After score update: score=${score}`);
+
+                 checkAndRegenerateTunnel(); // Calls the MODIFIED function to recycle segments
+
+                 checkAndSpawnModel();
+                 cleanupRandomModels();
+
+                 // Throttle DOM updates for performance
+                 if (currentTime - lastDomUpdateTime > domUpdateInterval) {
+                     scoreDisplay.textContent = `Score: ${Math.floor(score)}`;
+                     speedDisplay.textContent = `Speed: ${gameSpeed.toFixed(1)} units/s`;
+                     lastDomUpdateTime = currentTime;
+                 }
+
+                 // Update random model animations (spin)
+                 activeRandomModels.forEach(model => {
+                      if (model && model.userData.config) {
+                          const config = model.userData.config;
+                          const speed = (config.spinSpeed || 0) * deltaTime;
+                          if (config.spinAxis === 'y') model.rotation.y += speed;
+                          else if (config.spinAxis === 'x') model.rotation.x += speed;
+                          else if (config.spinAxis === 'z') model.rotation.z += speed;
+                      }
+                 });
+
+                 // --- Rendering ---
+                 // Render the scene to the render target
+                 renderer.setRenderTarget(renderTarget);
+                 renderer.clear();
+                 renderer.render(scene, camera);
+
+                 // Render the post-processing quad using the render target texture
+                 renderer.setRenderTarget(null); // Render to the screen
+                 renderer.clear();
+                 renderer.render(postScene, postCamera);
+
+                 // console.log(`--- End Frame ${frameCounter} ---`); // Optional: extremely frequent log
+
+             } catch (error) {
+                 console.error(`Error in animation loop (Frame ${frameCounter}):`, error);
+                 speakMessage(`Error: ${error.message}`); // Speak the error message
+                 // Attempt to stop the game and show an error message
+                 isGameStarted = false;
+                 isPaused = false;
+                 if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                 animationFrameId = null;
+
+                 instructionsBox.innerHTML = `<h2>Error!</h2><p>An error occurred during the game.</p><p style="font-size: 0.7em; color: red;">${error.message}</p><button id="reloadButton">Reload</button>`;
+                 instructionsBox.style.display = 'block';
+                 gameOverlay.style.display = 'none';
+                 pauseOverlay.style.display = 'none';
+                 document.getElementById('reloadButton').addEventListener('click', () => window.location.reload());
+
+                 // Attempt to exit pointer lock and stop audio
+                   try { if(document.pointerLockElement) document.exitPointerLock(); } catch(e) { console.warn("Error exiting pointer lock:", e); }
+                   if (backgroundMusicSource) { try { backgroundMusicSource.stop(); } catch(e){console.warn("Error stopping music:", e);} }
+                   if (audioContext && audioContext.state !== 'closed') { audioContext.close().catch(e=>console.error("Error closing audio context:", e)); audioContext = null; }
+             }
+         }
+
+        // --- Pause/Resume/Start/Event Listeners ---
+        function pauseGame() {
+             if (!isGameStarted || isPaused) return;
+             console.log("Pausing game...");
+             speakMessage("Paused"); // Announce pause
+             isPaused = true;
+             pauseButton.textContent = 'Resume';
+             pauseOverlay.style.display = 'flex'; // Use flex to center contents
+
+             // Stop the animation loop
+             if (animationFrameId) {
+                 cancelAnimationFrame(animationFrameId);
+                 animationFrameId = null;
+                 console.log("Animation frame cancelled on pause.");
+             }
+
+             // Suspend audio context if running
+             if (audioContext && audioContext.state === 'running') {
+                 audioContext.suspend().then(() => console.log("Audio suspended.")).catch(err => console.error("Audio suspend error:", err));
+             }
+
+             // Exit pointer lock
+             if (document.pointerLockElement === canvas) {
+                 document.exitPointerLock();
+             }
+           }
+
+        function resumeGame() {
+             if (!isGameStarted || !isPaused) return;
+             console.log("Resuming game...");
+             speakMessage("Resumed"); // Announce resume
+             isPaused = false;
+             pauseButton.textContent = 'Pause';
+             pauseOverlay.style.display = 'none';
+
+             // Reset previous time to prevent a large deltaTime spike on resume
+             previousTime = performance.now();
+
+             // Restart the animation loop if it's not running
+             if (!animationFrameId) {
+                  console.log("Requesting animation frame on resume.");
+                  animate();
+             } else {
+                 console.warn("Animation frame already exists on resume?");
+             }
+
+             // Request pointer lock again
+             canvas.requestPointerLock().catch(err => console.warn("Pointer lock failed on resume:", err));
+
+             // Resume audio context if suspended
+             if (audioContext && audioContext.state === 'suspended') {
+                 audioContext.resume().then(() => console.log("Audio resumed.")).catch(err => console.error("Audio resume error:", err));
+             }
+           }
+
+        async function startGame() {
+             if (isGameStarted) {
+                 console.log("Game already started.");
+                 return;
+             }
+             console.log("Starting game...");
+
+             await initializeAudio(); // Initialize audio context and load music
+
+             isGameStarted = true;
+             isPaused = false;
+             frameCounter = 0; // Reset frame counter
+
+             // Hide instructions, show game overlay
+             instructionsBox.style.display = 'none';
+             gameOverlay.style.display = 'flex'; // Use flex to lay out score/speed and pause button
+             pauseOverlay.style.display = 'none';
+             pauseButton.textContent = 'Pause'; // Ensure button text is correct
+
+             // Reset game state variables
+             previousTime = performance.now();
+             score = 0;
+             gameSpeed = 10; // Initial speed
+             lastDomUpdateTime = 0; // Reset DOM update timer
+
+             // Reset player position and look direction
+             controls.getObject().position.set(0, 0, 5); // Start slightly ahead of origin
+             controls.getObject().rotation.set(0, 0, 0);
+             camera.rotation.set(0,0,0); // Ensure camera rotation is also reset
+             camera.updateProjectionMatrix();
+             console.log(`startGame: Player initial position set to Z: ${controls.getObject().position.z}`);
+
+
+             // Initialize/reset game elements (tunnel, models, etc.)
+             initializeGameElements(); // This now uses the continuous segment creation
+
+             // Start background music if loaded and audio context is running
+               if (backgroundMusicBuffer && backgroundMusicGain && audioContext && audioContext.state === 'running') {
+                   backgroundMusicSource = playAudioLoop(backgroundMusicBuffer, backgroundMusicGain);
+                   updateGameSpeed(0); // Line from your log: tunnel.html:1464
+               } else {
+                   console.warn("Starting game without music.");
+               }
+
+             // Start the animation loop
+             console.log("Requesting first animation frame.");
+             if (!animationFrameId) {
+                  animate();
+             } else {
+                  console.warn("Animation frame already exists before calling animate() in startGame?");
+             }
+
+             speakMessage("Game Start!"); // Announce game start after everything is initialized
+
+             // Request pointer lock to control camera with mouse
+             canvas.requestPointerLock().catch(err => {
+                 console.warn("Pointer lock failed on start:", err);
+                 // Show instructions again or a message if pointer lock is essential
+                 // instructionsBox.style.display = 'block'; // Example: if pointer lock is required to play
+             });
+         }
+
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startGame);
+        pauseButton.addEventListener('click', () => {
+             if (isPaused) {
+                 resumeGame();
+             } else {
+                 pauseGame();
+             }
+         });
+
+        canvas.addEventListener('mousedown', onLeftMouseClick); // Add click listener for shooting
+
+        window.addEventListener('resize', () => {
+             resizeRendererToDisplaySize(renderer);
+         });
+
+        // Handle pointer lock change (e.g., pressing Escape)
+        document.addEventListener('pointerlockchange', () => {
+             if (document.pointerLockElement === canvas) {
+                 console.log('Pointer Locked');
+                 // If the game is started and was paused, and pointer lock is regained, resume
+                 if (isGameStarted && isPaused) {
+                     // Only resume if the pause overlay is currently visible (player clicked overlay to resume)
+                     // or if we want to auto-resume on lock (less common UX)
+                       if (pauseOverlay.style.display === 'none') {
+                           // resumeGame(); // Uncomment if you want to auto-resume on pointer lock
+                       } else {
+                           console.log("Pointer locked but still in manual pause state.");
+                       }
+                 }
+             } else {
+                 console.log('Pointer Unlocked');
+                 // If pointer lock is lost and the game is started and not already paused, pause the game
+                 if (isGameStarted && !isPaused) {
+                     pauseGame();
+                 }
+             }
+         }, false);
+
+
+        // Resume game when clicking the pause overlay
+         pauseOverlay.addEventListener('click', () => {
+              if (isGameStarted && isPaused) {
+                  resumeGame();
+              }
+          });
+
+
+        // --- Initial Setup ---
+        resizeRendererToDisplaySize(renderer);
+        initializeTorpedoPool();
+        initializeParticlePool();
+        // Game elements (tunnel, etc.) are created when startGame() is called.
+
+    </script>
+</body>
+</html>

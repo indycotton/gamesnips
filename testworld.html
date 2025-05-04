@@ -1,0 +1,406 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Interactive Fluid Water in Babylon.js</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+    <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
+    <script src="https://cdn.babylonjs.com/recast.js"></script>
+    <script src="https://cdn.babylonjs.com/ammo.js"></script>
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+    <script src="https://cdn.babylonjs.com/cannon.js"></script>
+    <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+    <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+    <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+    <script src="https://cdn.babylonjs.com/addons/babylonjs.addons.min.js"></script>
+    <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+    <style>
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        #canvasZone {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvasZone">
+        <canvas id="renderCanvas"></canvas>
+    </div>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var startRenderLoop = function(engine, canvas) {
+            engine.runRenderLoop(function() {
+                if (sceneToRender && sceneToRender.activeCamera) {
+                    sceneToRender.render();
+                }
+            });
+        }
+
+        var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function() {
+            return new BABYLON.Engine(canvas, true, {
+                preserveDrawingBuffer: true,
+                stencil: true,
+                disableWebGL2Support: false
+            });
+        };
+
+        // Function to create the scene
+        var createScene = function() {
+            var scene = new BABYLON.Scene(engine);
+            scene.ambientColor = new BABYLON.Color3(0.01, 0, 0);
+
+            var camera = new BABYLON.ArcRotateCamera("camera1", 12, Math.PI / 3, 55, BABYLON.Vector3.Zero(), scene);
+            camera.setTarget(BABYLON.Vector3.Zero());
+            camera.attachControl(canvas, true);
+            camera.wheelPrecision = 120.0
+
+            var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.7;
+
+            // Ground
+            var ground = BABYLON.MeshBuilder.CreateGround("ground", {
+                width: 23 * 2,
+                height: 23 * 2
+            }, scene);
+            ground.material = new BABYLON.StandardMaterial("groundMat", scene);
+            ground.material.diffuseTexture = new BABYLON.Texture("textures/crate.png", scene);
+
+            // Mountain (Heightmap - you'll need a heightmap image)
+            var mountain = BABYLON.MeshBuilder.CreateGroundFromHeightMap("gdhm", "textures/heightMap.png", {
+                width: 45,
+                height: 45,
+                subdivisions: 210,
+                maxHeight: 5
+            }, scene);
+            mountain.material = new BABYLON.StandardMaterial("groundMat", scene);
+            mountain.material.diffuseTexture = new BABYLON.Texture("textures/grass.png", scene);
+            mountain.material.diffuseTexture.uScale = mountain.material.diffuseTexture.vScale = 8;
+            mountain.material.specularColor = new BABYLON.Color3(0, .1, 0);
+            mountain.position.y = .5;
+
+            // Water
+            var water = BABYLON.Mesh.CreateGround("water", 45, 45, 256, scene); // Increased subdivisions for smoother waves
+            water.position.y += 2;
+
+            // Tub sides
+            const box1 = BABYLON.MeshBuilder.CreateBox("box1", {
+                height: 4,
+                width: 45,
+                depth: 1
+            }, scene);
+            box1.material = new BABYLON.StandardMaterial("box1Mat", scene);
+            box1.material.diffuseTexture = new BABYLON.Texture("textures/crate.png", scene);
+            box1.position.z = 23;
+            box1.position.y = 2;
+
+            const box2 = BABYLON.MeshBuilder.CreateBox("box2", {
+                height: 4,
+                width: 45,
+                depth: 1
+            }, scene);
+            box2.material = new BABYLON.StandardMaterial("box2Mat", scene);
+            box2.material.diffuseTexture = new BABYLON.Texture("textures/crate.png", scene);
+            box2.position.z = -23;
+            box2.position.y = 2;
+
+            const box3 = BABYLON.MeshBuilder.CreateBox("box3", {
+                height: 4,
+                width: 1,
+                depth: 45
+            }, scene);
+            box3.material = new BABYLON.StandardMaterial("box3Mat", scene);
+            box3.material.diffuseTexture = new BABYLON.Texture("textures/crate.png", scene);
+            box3.position.x = 23;
+            box3.position.y = 2;
+
+            const box4 = BABYLON.MeshBuilder.CreateBox("box4", {
+                height: 4,
+                width: 1,
+                depth: 45
+            }, scene);
+            box4.material = new BABYLON.StandardMaterial("box4Mat", scene);
+            box4.material.diffuseTexture = new BABYLON.Texture("textures/crate.png", scene);
+            box4.position.x = -23;
+            box4.position.y = 2;
+
+            // --- Interactive Fluid Water ---
+            // This is a simplified approach. True fluid simulation is computationally intensive.
+            // We'll use vertex displacement based on mouse interactions.
+
+            const waterVertexData = BABYLON.VertexData.ExtractFromMesh(water);
+            const waterPositions = waterVertexData.positions;
+            const waterIndices = waterVertexData.indices;
+            const waterVertexCount = waterPositions.length / 3;
+
+            // Store the original water vertex positions for resetting
+            const originalWaterPositions = waterPositions.slice();
+
+            // Function to create a disturbance (ripple)
+            function createRipple(x, z, strength, radius) {
+                for (let i = 0; i < waterVertexCount; i++) {
+                    const vertexX = waterPositions[i * 3];
+                    const vertexZ = waterPositions[i * 3 + 2];
+                    const dist = Math.sqrt((vertexX - x) * (vertexX - x) + (vertexZ - z) * (vertexZ - z));
+
+                    if (dist < radius) {
+                        const falloff = (radius - dist) / radius;
+                        waterPositions[i * 3 + 1] += strength * falloff; // Modify Y (height)
+                    }
+                }
+                waterVertexData.applyToMesh(water, true); // Update the mesh
+            }
+
+            // Mouse interaction
+            let mouseX = 0;
+            let mouseZ = 0;
+            let mouseDown = false;
+
+            canvas.addEventListener("mousemove", (event) => {
+                const rect = canvas.getBoundingClientRect();
+                mouseX = event.clientX - rect.left;
+                mouseY = event.clientY - rect.top;
+
+                // Convert 2D canvas coordinates to 3D world coordinates on the water plane
+                const pickResult = scene.pick(mouseX, mouseY, (mesh) => mesh === water);
+                if (pickResult.hit) {
+                    mouseZ = pickResult.pickedPoint.z;
+                    mouseX = pickResult.pickedPoint.x;
+                }
+            });
+
+            canvas.addEventListener("mousedown", () => {
+                mouseDown = true;
+            });
+
+            canvas.addEventListener("mouseup", () => {
+                mouseDown = false;
+            });
+
+            // --- Water Shader (Stylized) ---
+            BABYLON.Effect.ShadersStore["customVertexShader"] = "\r\n" +
+                "precision highp float;\r\n" +
+
+                // Attributes
+                "attribute vec3 position;\r\n" +
+                "attribute vec2 uv;\r\n" +
+
+                // Uniforms
+                "uniform mat4 worldViewProjection;\r\n" +
+                "uniform float time;\r\n" +
+                "out float newY;\r\n" +
+
+                // Varying
+                "varying vec3 vPosition;\r\n" +
+                "varying vec4 vClipSpace;\r\n" +
+
+                "void main(void) {\r\n" +
+                "float scale = 1.0;\r\n" +
+                // calc new position
+                "float newY = (sin(position.z * 1.0 / scale + time * 1.0)) * 0.1 ;\r\n" +
+                // new model position
+                "vec3 newPositionM = vec3(position.x,newY,position.z);\r\n" +
+                "gl_Position = worldViewProjection * vec4(newPositionM, 1.0);\r\n" +
+                // grab vertex position in world space
+                "vPosition = position;\r\n" +
+                // grab vertex position in view space
+                "vClipSpace = gl_Position;\r\n" +
+                "}\r\n";
+
+            BABYLON.Effect.ShadersStore["customFragmentShader"] = "\r\n" +
+                "precision highp float;\r\n" +
+
+                // Varyings
+                "varying vec3 vPosition;\r\n" +
+                // world distance, camera to water
+                "varying vec4 vClipSpace;\r\n" +
+
+                // Uniforms
+                "uniform sampler2D depthTex;\r\n" +
+                "uniform sampler2D refractionSampler;\r\n" +
+                "uniform float camMinZ;\r\n" +
+                "uniform float camMaxZ;\r\n" +
+                "uniform float maxDepth;\r\n" +
+                // water colors
+                "uniform vec4 wFoamColor;\r\n" +
+                "uniform vec4 wDeepColor;\r\n" +
+                "uniform vec4 wShallowColor;\r\n" +
+                "uniform float time;\r\n" +
+                "uniform float wNoiseScale;\r\n" +
+                "uniform float wNoiseOffset;\r\n" +
+                "uniform float fNoiseScale;\r\n" +
+                "in float newY;\r\n" +
+
+                "float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}\r\n" +
+                "vec4 mod289(vec4 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}\r\n" +
+                "vec4 perm(vec4 x){return mod289(((x * 34.0) + 1.0) * x);}\r\n" +
+
+                "float noise(vec3 p){\r\n" +
+                "vec3 a = floor(p);\r\n" +
+                "vec3 d = p - a;\r\n" +
+                "d = d * d * (3.0 - 2.0 * d);\r\n" +
+
+                "vec4 b = a.xxyy + vec4(0.0, 1.0, 0.0, 1.0);\r\n" +
+                "vec4 k1 = perm(b.xyxy);\r\n" +
+                "vec4 k2 = perm(k1.xyxy + b.zzww);\r\n" +
+
+                "vec4 c = k2 + a.zzzz;\r\n" +
+                "vec4 k3 = perm(c);\r\n" +
+                "vec4 k4 = perm(c + 1.0);\r\n" +
+
+                "vec4 o1 = fract(k3 * (1.0 / 41.0));\r\n" +
+                "vec4 o2 = fract(k4 * (1.0 / 41.0));\r\n" +
+
+                "vec4 o3 = o2 * d.z + o1 * (1.0 - d.z);\r\n" +
+                "vec2 o4 = o3.yw * d.x + o3.xz * (1.0 - d.x);\r\n" +
+
+                "return o4.y * d.y + o4.x * (1.0 - d.y);\r\n" +
+                "}\r\n" +
+
+                "void main(void) {\r\n" +
+                // waveNoise
+                "float waveNoise = noise(vec3(0., time, 0.)+vPosition*wNoiseScale)*wNoiseOffset;\r\n" +
+
+                // remap frag screen space coords to ndc (-1 to +1)
+                "vec2 ndc = (vClipSpace.xy / vClipSpace.w) / 2.0 + 0.5;\r\n" +
+                "float depthOfObjectBehindWater = texture2D(depthTex, vec2(ndc.x, ndc.y)+waveNoise).r;\r\n" +
+                "float linearWaterDepth = (vClipSpace.z + camMinZ) / (camMaxZ + camMinZ);\r\n" +
+                "float waterDepth = camMaxZ*(depthOfObjectBehindWater - linearWaterDepth);\r\n" +
+                "float wdepth = clamp((waterDepth/maxDepth), 0.0, 1.0);\r\n" +
+
+                // sampling refractive colors
+                "vec4 refractiveColor = texture2D(refractionSampler, vec2(ndc.x, ndc.y)+waveNoise+newY);\r\n" +
+
+                // foam
+                "float foam = 1.0-smoothstep(0.1, 0.2, wdepth);\r\n" +
+                "float foamEffect = smoothstep( 0.1, 0.2, noise(vec3(0., time, 0.)+vPosition*fNoiseScale*0.3)*foam);\r\n" +
+                "vec4 foamColor = vec4(foamEffect) * 0.5;\r\n" +
+
+                // Colors
+                "vec4 baseColor = vec4(0.0);\r\n" +
+                "baseColor = mix(wShallowColor, wDeepColor, wdepth);\r\n" +
+                "baseColor = mix(refractiveColor, baseColor, baseColor.a);\r\n" +
+                "baseColor = mix(wFoamColor, baseColor, 1.0 - foamColor.r);\r\n" +
+                // final result
+                "gl_FragColor = baseColor;\r\n" +
+
+                "}\r\n";
+
+            var shaderMaterial = new BABYLON.ShaderMaterial("shader", scene, {
+                    vertex: "custom",
+                    fragment: "custom"
+                }, {
+                    attributes: ["position", "normal", "uv"],
+                    uniforms: ["world", "worldView", "worldViewProjection", "view", "projection"]
+                });
+
+            // linear depth only!! I dun want to work with non-linear depth map!
+            var depthRenderer = scene.enableDepthRenderer(scene.activeCamera, false);
+            var depthTex = depthRenderer.getDepthMap();
+
+            var _refractionRTT = new BABYLON.RenderTargetTexture("water_refraction", {
+                width: 256,
+                height: 256
+            }, scene, false, true);
+            _refractionRTT.wrapU = BABYLON.Constants.TEXTURE_MIRROR_ADDRESSMODE;
+            _refractionRTT.wrapV = BABYLON.Constants.TEXTURE_MIRROR_ADDRESSMODE;
+            _refractionRTT.ignoreCameraViewport = true;
+            _refractionRTT.refreshRate = 1;
+
+            _refractionRTT.renderList = depthTex.renderList = [ground, box1, box2, box3, box4, mountain];
+
+            scene.customRenderTargets.push(_refractionRTT);
+
+            // set shader parameters
+            shaderMaterial.setTexture("depthTex", depthTex);
+            shaderMaterial.setTexture("refractionSampler", _refractionRTT);
+            shaderMaterial.setFloat("camMinZ", scene.activeCamera.minZ);
+            shaderMaterial.setFloat("camMaxZ", scene.activeCamera.maxZ);
+            shaderMaterial.setFloat("time", 0);
+            shaderMaterial.setFloat("wNoiseScale", 6.0);
+            shaderMaterial.setFloat("wNoiseOffset", 0.01);
+            shaderMaterial.setFloat("fNoiseScale", 10.0);
+            shaderMaterial.setFloat("maxDepth", 5.0);
+            shaderMaterial.setVector4("wDeepColor", new BABYLON.Vector4(0.0, 0.3, 0.5, 0.8));
+            shaderMaterial.setVector4("wShallowColor", new BABYLON.Vector4(0.0, 0.6, 0.8, 0.8));
+            shaderMaterial.setVector4("wFoamColor", new BABYLON.Vector4(1, 1, 1, 1));
+            shaderMaterial.alpha = 0.5;
+
+            var time = 0;
+            scene.registerBeforeRender(function() {
+                time += engine.getDeltaTime() * 0.001;
+                shaderMaterial.setFloat("time", time);
+
+                // Apply ripple effect if mouse is down
+                if (mouseDown) {
+                    createRipple(mouseX, mouseZ, 0.2, 3); // Adjust strength and radius
+                }
+
+                // Smooth out the water over time (crude damping)
+                for (let i = 0; i < waterVertexCount; i++) {
+                    waterPositions[i * 3 + 1] *= 0.95; // Reduce height displacement
+                }
+                waterVertexData.applyToMesh(water, true);
+            });
+
+            water.material = shaderMaterial;
+
+            return scene;
+        };
+
+        window.initFunction = async function() {
+            var asyncEngineCreation = async function() {
+                try {
+                    return createDefaultEngine();
+                } catch (e) {
+                    console.log("the available createEngine function failed. Creating the default engine instead");
+                    return createDefaultEngine();
+                }
+            }
+
+            window.engine = await asyncEngineCreation();
+
+            if (!engine) throw 'engine should not be null.';
+            startRenderLoop(engine, canvas);
+            window.scene = createScene();
+        };
+
+        initFunction().then(() => {
+            sceneToRender = scene
+        });
+
+        // Resize
+        window.addEventListener("resize", function() {
+            engine.resize();
+        });
+    </script>
+</body>
+
+</html>

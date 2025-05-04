@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smaller Pond with Static Blue Level and Faster Decay</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script>
+let cols, rows;
+let w = 10; // voxel size
+let heightGrid, velocityGrid;
+let damping = 0.97; // Increased damping for faster decay
+let renderList = [];
+let baseWaterLevel = -0.5;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight, WEBGL);
+  cols = 100;
+  rows = 100;
+  heightGrid = Array.from({length: cols}, () => Array(rows).fill(baseWaterLevel)); // Initialize with a base level
+  velocityGrid = Array.from({length: cols}, () => Array(rows).fill(0));
+
+  // Add initial water in a central area (smaller pond shape)
+  let centerX = cols / 2;
+  let centerY = rows / 2;
+  let radius = Math.min(cols, rows) / 6; // Reduced radius for a smaller pond
+  for (let x = 0; x < cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      let distance = dist(x, y, centerX, centerY);
+      if (distance < radius) {
+        heightGrid[x][y] = 0.5; // Initial water level
+      }
+    }
+  }
+}
+
+function draw() {
+  background(10);
+  rotateX(PI / 3.2);
+  rotateZ(frameCount * 0.001);
+  directionalLight(255, 255, 255, 0.5, 1, -0.5);
+  ambientLight(50);
+
+  let nextHeight = Array.from({length: cols}, () => Array(rows).fill(0));
+  let nextVelocity = Array.from({length: cols}, () => Array(rows).fill(0));
+  renderList = [];
+
+  for (let x = 1; x < cols - 1; x++) {
+    for (let y = 1; y < rows - 1; y++) {
+      let sum = heightGrid[x+1][y] + heightGrid[x-1][y] + heightGrid[x][y+1] + heightGrid[x][y-1] - 4 * heightGrid[x][y];
+      let accel = sum * 0.15;
+      nextVelocity[x][y] = (velocityGrid[x][y] + accel) * damping;
+      nextHeight[x][y] = heightGrid[x][y] + nextVelocity[x][y];
+
+      if (Math.abs(nextHeight[x][y] - heightGrid[x][y]) > 0.01) {
+        renderList.push({ x, y, h: nextHeight[x][y] });
+      }
+    }
+  }
+
+  for (let x = 0; x < cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      heightGrid[x][y] = nextHeight[x][y];
+      velocityGrid[x][y] = nextVelocity[x][y];
+    }
+  }
+
+  translate(-cols * w / 2, -rows * w / 2);
+
+  // Render static blue water level
+  for (let x = 0; x < cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      push();
+      translate(x * w, y * w, baseWaterLevel * 10);
+      fill(0, 100, 200, 150); // Darker blue, slightly transparent
+      noStroke();
+      box(w * 0.9, w * 0.9, w * 0.5); // Thin box for water level
+      pop();
+    }
+  }
+
+  // Render water surface
+  for (let v of renderList) {
+    push();
+    translate(v.x * w, v.y * w, v.h * 10);
+    let blueShade = map(v.h, -2, 2, 100, 255);
+    fill(100, 180, blueShade);
+    noStroke();
+    box(w * 0.9, w * 0.9, constrain(v.h * 20, 1, 100));
+    pop();
+  }
+}
+
+function mouseDragged() {
+  let mx = floor((mouseX - width / 2 + cols * w / 2) / w);
+  let my = floor((mouseY - height / 2 + rows * w / 2) / w);
+  if (mx >= 0 && mx < cols && my >= 0 && my < rows) {
+    heightGrid[mx][my] += 4; // Reduced disturbance for a calmer pool
+    renderList.push({ x: mx, y: my, h: heightGrid[mx][my] });
+  }
+}
+</script>
+</body>
+</html>

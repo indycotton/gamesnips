@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pleistocene Clay Crafter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Press Start 2P', cursive; /* Apply game font */
+            background-color: #87CEEB; /* Sky blue background */
+            color: #4A2E2B; /* Dark brown text */
+            overscroll-behavior: none; /* Prevent pull-to-refresh */
+        }
+        .game-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 1rem;
+            background-color: #D2B48C; /* Tan background for game area */
+            border: 8px solid #8B4513; /* SaddleBrown border */
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .resource-node, .crafting-button {
+            border: 4px solid #4A2E2B; /* Dark brown border */
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            text-align: center;
+            user-select: none; /* Prevent text selection */
+        }
+        .resource-node:active, .crafting-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .clay-node { background-color: #A0522D; color: white; } /* Sienna */
+        .stick-node { background-color: #8B4513; color: white; } /* SaddleBrown */
+        .stone-node { background-color: #708090; color: white; } /* SlateGray */
+        .crafting-button { background-color: #228B22; color: white; } /* ForestGreen */
+        .crafting-button:disabled {
+            background-color: #90EE90; /* LightGreen */
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .inventory-item {
+            background-color: #F5F5DC; /* Beige */
+            border: 2px solid #8B4513; /* SaddleBrown */
+            border-radius: 8px;
+            padding: 0.5rem;
+            margin: 0.25rem;
+            min-width: 100px; /* Ensure items don't get too small */
+        }
+        .message-box {
+            min-height: 3em; /* Ensure space for messages */
+            background-color: #FFF8DC; /* Cornsilk */
+            border: 2px dashed #8B4513;
+            border-radius: 5px;
+            padding: 0.5rem;
+            margin-top: 1rem;
+            text-align: center;
+            font-size: 0.9em;
+            color: #553311;
+        }
+        /* Simple SVG Styles */
+        .resource-svg {
+            width: 30px;
+            height: 30px;
+            margin: 0 auto 0.5rem auto; /* Center SVG */
+            display: block;
+        }
+        .resource-svg path, .resource-svg circle, .resource-svg rect {
+            stroke: #4A2E2B; /* Dark brown outline */
+            stroke-width: 2;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="game-container">
+        <h1 class="text-2xl md:text-3xl font-bold text-center mb-6 text-[#4A2E2B]">Pleistocene Clay Crafter</h1>
+
+        <div class="mb-6 p-4 bg-[#90EE90] rounded-lg border-4 border-[#2E8B57]">
+            <h2 class="text-lg font-semibold mb-4 text-center">Gather Resources:</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div id="gather-clay" class="resource-node clay-node">
+                    <svg class="resource-svg" viewBox="0 0 100 100">
+                        <path d="M20,80 Q50,40 80,80 Q50,95 20,80 Z" fill="#A0522D"/>
+                    </svg>
+                    Gather Clay
+                </div>
+                <div id="gather-stick" class="resource-node stick-node">
+                     <svg class="resource-svg" viewBox="0 0 100 100">
+                         <rect x="15" y="15" width="10" height="70" rx="5" ry="5" transform="rotate(15 50 50)" fill="#8B4513"/>
+                         <rect x="65" y="30" width="8" height="40" rx="4" ry="4" transform="rotate(105 50 50)" fill="#8B4513"/>
+                    </svg>
+                    Gather Stick
+                </div>
+                 <div id="gather-stone" class="resource-node stone-node">
+                    <svg class="resource-svg" viewBox="0 0 100 100">
+                        <circle cx="50" cy="55" r="30" fill="#708090"/>
+                        <ellipse cx="40" cy="45" rx="15" ry="10" fill="#8494A4"/>
+                    </svg>
+                    Gather Stone
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6 p-4 bg-[#F5DEB3] rounded-lg border-4 border-[#D2691E]">
+            <h2 class="text-lg font-semibold mb-2 text-center">Inventory:</h2>
+            <div id="inventory" class="flex flex-wrap justify-center gap-2">
+                <div class="inventory-item">Clay: <span id="clay-count">0</span></div>
+                <div class="inventory-item">Sticks: <span id="stick-count">0</span></div>
+                <div class="inventory-item">Stones: <span id="stone-count">0</span></div>
+                <div class="inventory-item">Pots: <span id="pot-count">0</span></div>
+                <div class="inventory-item">Axes: <span id="axe-count">0</span></div>
+            </div>
+        </div>
+
+        <div class="mb-6 p-4 bg-[#ADD8E6] rounded-lg border-4 border-[#4682B4]">
+            <h2 class="text-lg font-semibold mb-4 text-center">Craft Items:</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="craft-pot" class="crafting-button" disabled>
+                    Craft Pot <br> (2 Clay)
+                </button>
+                <button id="craft-axe" class="crafting-button" disabled>
+                    Craft Axe <br> (1 Stick, 1 Stone)
+                </button>
+            </div>
+        </div>
+
+        <div id="message-box" class="message-box">
+            Welcome! Click resources to gather.
+        </div>
+
+    </div>
+
+    <script>
+        // --- Game State ---
+        const inventory = {
+            clay: 0,
+            stick: 0,
+            stone: 0,
+            pot: 0,
+            axe: 0
+        };
+
+        // --- DOM Elements ---
+        const gatherClayButton = document.getElementById('gather-clay');
+        const gatherStickButton = document.getElementById('gather-stick');
+        const gatherStoneButton = document.getElementById('gather-stone');
+
+        const clayCountSpan = document.getElementById('clay-count');
+        const stickCountSpan = document.getElementById('stick-count');
+        const stoneCountSpan = document.getElementById('stone-count');
+        const potCountSpan = document.getElementById('pot-count');
+        const axeCountSpan = document.getElementById('axe-count');
+
+        const craftPotButton = document.getElementById('craft-pot');
+        const craftAxeButton = document.getElementById('craft-axe');
+
+        const messageBox = document.getElementById('message-box');
+
+        // --- Game Logic ---
+
+        /**
+         * Updates the inventory display and crafting button states.
+         */
+        function updateDisplay() {
+            // Update counts
+            clayCountSpan.textContent = inventory.clay;
+            stickCountSpan.textContent = inventory.stick;
+            stoneCountSpan.textContent = inventory.stone;
+            potCountSpan.textContent = inventory.pot;
+            axeCountSpan.textContent = inventory.axe;
+
+            // Update crafting button states
+            craftPotButton.disabled = inventory.clay < 2;
+            craftAxeButton.disabled = inventory.stick < 1 || inventory.stone < 1;
+
+            // Add visual cues for enabled buttons (optional)
+             craftPotButton.classList.toggle('opacity-60', craftPotButton.disabled);
+             craftPotButton.classList.toggle('cursor-not-allowed', craftPotButton.disabled);
+             craftAxeButton.classList.toggle('opacity-60', craftAxeButton.disabled);
+             craftAxeButton.classList.toggle('cursor-not-allowed', craftAxeButton.disabled);
+        }
+
+        /**
+         * Displays a message to the player.
+         * @param {string} msg - The message to display.
+         */
+        function showMessage(msg) {
+            messageBox.textContent = msg;
+            // Optional: Clear message after a delay
+            // setTimeout(() => { messageBox.textContent = ''; }, 3000);
+        }
+
+        /**
+         * Handles gathering a resource.
+         * @param {string} resourceType - The type of resource ('clay', 'stick', 'stone').
+         * @param {number} amount - The amount gathered.
+         */
+        function gatherResource(resourceType, amount = 1) {
+            inventory[resourceType] += amount;
+            showMessage(`Gathered ${amount} ${resourceType}!`);
+            updateDisplay();
+        }
+
+        /**
+         * Handles crafting an item.
+         * @param {string} itemType - The type of item to craft ('pot', 'axe').
+         */
+        function craftItem(itemType) {
+            if (itemType === 'pot') {
+                if (inventory.clay >= 2) {
+                    inventory.clay -= 2;
+                    inventory.pot += 1;
+                    showMessage('Crafted 1 Pot!');
+                } else {
+                    showMessage('Not enough clay to craft a pot.');
+                }
+            } else if (itemType === 'axe') {
+                if (inventory.stick >= 1 && inventory.stone >= 1) {
+                    inventory.stick -= 1;
+                    inventory.stone -= 1;
+                    inventory.axe += 1;
+                    showMessage('Crafted 1 Axe!');
+                } else {
+                    showMessage('Not enough sticks or stones to craft an axe.');
+                }
+            }
+            updateDisplay();
+        }
+
+        // --- Event Listeners ---
+
+        // Use 'click' for both mouse and basic touch interaction
+        gatherClayButton.addEventListener('click', () => gatherResource('clay'));
+        gatherStickButton.addEventListener('click', () => gatherResource('stick'));
+        gatherStoneButton.addEventListener('click', () => gatherResource('stone'));
+
+        craftPotButton.addEventListener('click', () => craftItem('pot'));
+        craftAxeButton.addEventListener('click', () => craftItem('axe'));
+
+        // --- Initial Setup ---
+        updateDisplay(); // Initialize display on load
+
+        // Add touchstart listeners for immediate feedback on touch devices
+        // (prevents delay sometimes seen with 'click')
+        const addTouchFeedback = (element) => {
+             element.addEventListener('touchstart', (e) => {
+                 // Prevent triggering click if touch moves (scrolling)
+                 element.classList.add('active-touch');
+             }, { passive: true }); // Use passive for performance if preventDefault isn't needed
+
+             element.addEventListener('touchend', () => {
+                 element.classList.remove('active-touch');
+             });
+             element.addEventListener('touchcancel', () => {
+                 element.classList.remove('active-touch');
+             });
+        };
+
+        addTouchFeedback(gatherClayButton);
+        addTouchFeedback(gatherStickButton);
+        addTouchFeedback(gatherStoneButton);
+        addTouchFeedback(craftPotButton);
+        addTouchFeedback(craftAxeButton);
+
+    </script>
+
+</body>
+</html>

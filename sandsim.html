@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Sand Simulation with GPGPU Water</title>
+
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
+            "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/dist/esm/simplex-noise.js"
+        }
+    }
+    </script>
+
+
+
+    <style>
+        /* CSS Styles (Largely unchanged, ensure controls container styles are present) */
+        body { margin: 0; overflow: hidden; background: #1e395b; font-family: 'Roboto', sans-serif; }
+        canvas { display: block; }
+        .controls-container {
+            position: absolute; top: 10px; left: 10px; background-color: rgba(0, 0, 0, 0.5);
+            color: #ffffff; padding: 15px; border-radius: 12px; z-index: 10; display: flex;
+            flex-direction: column; gap: 12px; max-height: calc(100vh - 40px); overflow-y: auto;
+            font-size: 14px; width: 300px; box-sizing: border-box; font-family: 'Roboto', sans-serif;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .control-row { display: flex; gap: 15px; align-items: center; flex-wrap: nowrap; }
+        .control-label { width: 150px; text-align: left; flex-shrink: 0; white-space: nowrap; font-weight: 500; color: #eeeeee; }
+        .control-input {
+            flex-grow: 1; min-width: 60px; padding: 8px; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px; background-color: rgba(255, 255, 255, 0.05); color: #ffffff; font-size: 14px;
+            box-sizing: border-box; font-family: 'Roboto Mono', monospace; transition: border-color 0.3s ease, background-color 0.3s ease;
+        }
+        .control-input:focus { outline: none; border-color: rgba(125, 211, 252, 0.8); background-color: rgba(255, 255, 255, 0.1); }
+        .control-input[type="range"] { padding: 0; height: 10px; cursor: pointer; flex-grow: 1; border: none; }
+        .control-input[type="color"] { padding: 1px; height: 30px; flex-grow: 0; width: 48px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; }
+        .control-button {
+            padding: 10px 18px; background-color: rgba(125, 211, 252, 0.2); color: #ffffff; border: none;
+            border-radius: 6px; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease, transform 0.2s ease;
+            margin-top: 8px; text-align: center; width: 100%; box-sizing: border-box; font-family: 'Roboto', sans-serif;
+            font-weight: 500; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .control-button:hover { background-color: rgba(125, 211, 252, 0.3); transform: scale(1.04); }
+        .control-section-title {
+            font-weight: 700; margin-top: 15px; margin-bottom: 8px; border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 5px; font-size: 16px; color: #ffffff;
+        }
+        /* Add slider value display style */
+        .value-display { min-width: 40px; text-align: right; font-family: 'Roboto Mono', monospace;}
+    </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+    <script id="heightmapFragmentShader" type="x-shader/x-fragment">
+        // From first code: Calculates water height based on neighbors and mouse
+        #include <common>
+        uniform vec2 mousePos;
+        uniform float mouseSize;
+        uniform float viscosity;
+        uniform float deep; // Renamed from mouseDeep for clarity
+
+        void main()	{
+            vec2 cellSize = 1.0 / resolution.xy; // resolution is automatically provided by GPUComputationRenderer
+            vec2 uv = gl_FragCoord.xy * cellSize;
+
+            // Read heightmap
+            vec4 heightmapValue = texture2D( heightmap, uv ); // heightmap is the variable name from addVariable
+
+            // Get neighbours
+            vec4 north = texture2D( heightmap, uv + vec2( 0.0, cellSize.y ) );
+            vec4 south = texture2D( heightmap, uv + vec2( 0.0, - cellSize.y ) );
+            vec4 east = texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) );
+            vec4 west = texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) );
+
+            // Current height: heightmapValue.x
+            // Previous height: heightmapValue.y
+
+            // Calculate new height using wave equation finite difference
+            float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - heightmapValue.y ) * viscosity; // viscosity includes damping
+
+            // Simple wrap boundary condition (optional, adjust as needed)
+            // float boundaryLimit = 0.01; // Threshold for boundary damping
+            // if (uv.x < boundaryLimit || uv.x > 1.0 - boundaryLimit || uv.y < boundaryLimit || uv.y > 1.0 - boundaryLimit) {
+            //     newHeight *= 0.9; // Dampen edges more
+            // }
+
+            // Mouse interaction (Circular disturbance)
+            float mousePhase = clamp( length( ( uv - vec2( 0.5 ) ) * BOUNDS - vec2( mousePos.x, - mousePos.y ) ) * PI / mouseSize, 0.0, PI );
+            newHeight -= ( cos( mousePhase ) + 1.0 ) * deep * 0.1; // Adjusted deep multiplier
+
+            // Store current height in previous height (y) and new height in current height (x)
+            heightmapValue.y = heightmapValue.x;
+            heightmapValue.x = newHeight;
+
+            gl_FragColor = heightmapValue; // Output vec4(newHeight, oldHeight, 0, 1)
+        }
+    </script>
+
+    <script id="smoothFragmentShader" type="x-shader/x-fragment">
+        // From first code: Simple box blur for smoothing
+        uniform sampler2D smoothTexture; // Texture to be smoothed
+        uniform vec2 resolution; // Added resolution uniform
+
+        void main()	{
+            vec2 cellSize = 1.0 / resolution.xy;
+            vec2 uv = gl_FragCoord.xy * cellSize;
+
+            // Sample neighbours (Box Blur)
+            vec4 textureValue = texture2D( smoothTexture, uv );
+            textureValue += texture2D( smoothTexture, uv + vec2( 0.0, cellSize.y ) ); // North
+            textureValue += texture2D( smoothTexture, uv + vec2( 0.0, - cellSize.y ) ); // South
+            textureValue += texture2D( smoothTexture, uv + vec2( cellSize.x, 0.0 ) ); // East
+            textureValue += texture2D( smoothTexture, uv + vec2( - cellSize.x, 0.0 ) ); // West
+
+            textureValue /= 5.0; // Average
+
+            gl_FragColor = textureValue;
+        }
+    </script>
+    <div class="controls-container">
+        <div class="control-section-title">General</div>
+        <div class="control-row"> <label class="control-label" for="particleCountInput">Sand:</label> <input type="number" id="particleCountInput" class="control-input" value="15000" step="1000" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="particleSizeInput">Sand Size:</label> <input type="number" id="particleSizeInput" class="control-input" value="0.30" step="0.05" min="0.01"> </div>
+        <div class="control-row"> <label class="control-label" for="gravityInput">Gravity:</label> <input type="number" id="gravityInput" class="control-input" value="0.0006" step="0.0001" min="0"> </div>
+
+        <div class="control-section-title">Terrain</div>
+        <div class="control-row"> <label class="control-label" for="modificationRadiusInput">Mod Radius:</label> <input type="number" id="modificationRadiusInput" class="control-input" value="5" step="0.5" min="0.5"> </div>
+        <div class="control-row"> <label class="control-label" for="modificationStrengthInput">Mod Strength:</label> <input type="number" id="modificationStrengthInput" class="control-input" value="0.1" step="0.01" min="0.01"> </div>
+        <div class="control-row"> <label class="control-label" for="terrainSizeInput">Size:</label> <input type="number" id="terrainSizeInput" class="control-input" value="100" step="10" min="20"> </div>
+        <div class="control-row"> <label class="control-label" for="terrainSegmentsInput">Detail:</label> <input type="number" id="terrainSegmentsInput" class="control-input" value="100" step="10" min="10"> </div>
+        <div class="control-row"> <label class="control-label" for="terrainHeightScaleInput">Height:</label> <input type="number" id="terrainHeightScaleInput" class="control-input" value="15" step="1" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="terrainFrequencyInput">Scale:</label> <input type="number" id="terrainFrequencyInput" class="control-input" value="0.03" step="0.005" min="0.001"> </div>
+        <div class="control-row"> <label class="control-label" for="terrainColorInput">Color:</label> <input type="color" id="terrainColorInput" class="control-input" value="#654321"> </div>
+
+        <div class="control-section-title">Trees</div>
+        <div class="control-row"> <label class="control-label" for="particleTreeCountInput">Count:</label> <input type="number" id="particleTreeCountInput" class="control-input" value="30" step="5" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="particlesPerTreeInput">Particles/Tree:</label> <input type="number" id="particlesPerTreeInput" class="control-input" value="400" step="50" min="50"> </div>
+        <div class="control-row"> <label class="control-label" for="treeHeightInput">Height:</label> <input type="number" id="treeHeightInput" class="control-input" value="8" step="0.5" min="1"> </div>
+        <div class="control-row"> <label class="control-label" for="leafClusterSizeInput">Leaf Size:</label> <input type="number" id="leafClusterSizeInput" class="control-input" value="3.0" step="0.2" min="0.5"> </div>
+        <div class="control-row"> <label class="control-label" for="leafColorInput">Leaf Color:</label> <input type="color" id="leafColorInput" class="control-input" value="#228B22"> </div>
+        <div class="control-row"> <label class="control-label" for="trunkColorInput">Trunk Color:</label> <input type="color" id="trunkColorInput" class="control-input" value="#8B4513"> </div>
+        <div class="control-row"> <label class="control-label" for="treeSwayStrengthInput">Sway Strength:</label> <input type="number" id="treeSwayStrengthInput" class="control-input" value="0.2" step="0.02" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="treeSwaySpeedInput">Sway Speed:</label> <input type="number" id="treeSwaySpeedInput" class="control-input" value="1.0" step="0.1" min="0"> </div>
+
+        <div class="control-section-title">Grass & Flowers</div>
+        <div class="control-row"> <label class="control-label" for="vegetationParticleSizeInput">Particle Size:</label> <input type="number" id="vegetationParticleSizeInput" class="control-input" value="0.20" step="0.02" min="0.01"> </div>
+        <div class="control-row"> <label class="control-label" for="grassDensityInput">Grass Density:</label> <input type="number" id="grassDensityInput" class="control-input" value="10" step="1" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="flowerDensityInput">Flower Density:</label> <input type="number" id="flowerDensityInput" class="control-input" value="2" step="0.5" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="grassHeightInput">Grass Height:</label> <input type="number" id="grassHeightInput" class="control-input" value="0.6" step="0.1" min="0.1"> </div>
+        <div class="control-row"> <label class="control-label" for="flowerHeightInput">Flower Height:</label> <input type="number" id="flowerHeightInput" class="control-input" value="0.4" step="0.1" min="0.1"> </div>
+        <div class="control-row"> <label class="control-label" for="grassColorInput">Grass Color:</label> <input type="color" id="grassColorInput" class="control-input" value="#339633"> </div>
+        <div class="control-row"> <label class="control-label" for="flowerColor1Input">Flower Color 1:</label> <input type="color" id="flowerColor1Input" class="control-input" value="#FF69B4"> </div>
+        <div class="control-row"> <label class="control-label" for="flowerColor2Input">Flower Color 2:</label> <input type="color" id="flowerColor2Input" class="control-input" value="#FFFF00"> </div>
+        <div class="control-row"> <label class="control-label" for="grassSwayStrengthInput">Grass Sway:</label> <input type="number" id="grassSwayStrengthInput" class="control-input" value="0.15" step="0.02" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="grassSwaySpeedInput">Grass Sway Speed:</label> <input type="number" id="grassSwaySpeedInput" class="control-input" value="1.5" step="0.1" min="0"> </div>
+
+        <div class="control-section-title">Water Simulation (GPGPU)</div>
+        <div class="control-row"> <label class="control-label" for="baseWaterLevelInput">Water Level Y:</label> <input type="number" id="baseWaterLevelInput" class="control-input" value="2.0" step="0.5"> </div>
+        <div class="control-row"> <label class="control-label" for="waterColorInput">Water Color:</label> <input type="color" id="waterColorInput" class="control-input" value="#1a5f8a"> </div>
+        <div class="control-row"> <label class="control-label" for="waterMouseSizeInput">Mouse Size:</label> <input type="range" id="waterMouseSizeInput" class="control-input" value="0.2" step="0.05" min="0.1" max="2.0"> <span id="waterMouseSizeValue" class="value-display">0.2</span> </div>
+        <div class="control-row"> <label class="control-label" for="waterDeepInput">Mouse Strength:</label> <input type="range" id="waterDeepInput" class="control-input" value="0.01" step="0.005" min="0.0" max="0.2"> <span id="waterDeepValue" class="value-display">0.01</span> </div>
+        <div class="control-row"> <label class="control-label" for="waterViscosityInput">Viscosity/Damping:</label> <input type="range" id="waterViscosityInput" class="control-input" value="0.98" step="0.001" min="0.9" max="0.999"> <span id="waterViscosityValue" class="value-display">0.98</span> </div>
+        <div class="control-row"> <label class="control-label" for="waterSpeedInput">Sim Speed:</label> <input type="range" id="waterSpeedInput" class="control-input" value="4" step="1" min="1" max="6"> <span id="waterSpeedValue" class="value-display">4</span> </div>
+        <div class="control-section-title">Water Sparkles</div>
+        <div class="control-row"> <label class="control-label" for="sparkleCountInput">Sparkle Count:</label> <input type="number" id="sparkleCountInput" class="control-input" value="300" step="50" min="0"> </div>
+        <div class="control-row"> <label class="control-label" for="sparkleSizeInput">Sparkle Size:</label> <input type="number" id="sparkleSizeInput" class="control-input" value="0.15" step="0.01" min="0.01"> </div>
+        <div class="control-row"> <label class="control-label" for="sparkleColorInput">Sparkle Color:</label> <input type="color" id="sparkleColorInput" class="control-input" value="#FFFFFF"> </div>
+
+        <div class="control-section-title">Visuals</div>
+        <div class="control-row"> <label class="control-label" for="skyColorInput">Sky Color:</label> <input type="color" id="skyColorInput" class="control-input" value="#87CEEB"> </div>
+        <div class="control-row"> <label class="control-label" for="fogNearInput">Fog Near:</label> <input type="number" id="fogNearInput" class="control-input" value="50" step="5"> </div>
+        <div class="control-row"> <label class="control-label" for="fogFarInput">Fog Far:</label> <input type="number" id="fogFarInput" class="control-input" value="250" step="10"> </div>
+        <div class="control-row"> <label class="control-label" for="lowColorInput">Low Sand Color:</label> <input type="color" id="lowColorInput" class="control-input" value="#002060"> </div>
+        <div class="control-row"> <label class="control-label" for="highColorInput">High Sand Color:</label> <input type="color" id="highColorInput" class="control-input" value="#ffffff"> </div>
+        <div class="control-row"> <label class="control-label" for="colorMinHeightInput">Color Min Height:</label> <input type="number" id="colorMinHeightInput" class="control-input" value="0" step="0.5"> </div>
+        <div class="control-row"> <label class="control-label" for="colorMaxHeightInput">Color Max Height:</label> <input type="number" id="colorMaxHeightInput" class="control-input" value="15" step="0.5"> </div>
+
+        <div class="control-section-title">Actions</div>
+        <button class="control-button" id="resetSimulationButton">Reset Simulation</button>
+        <button class="control-button" id="applyCentralForceButton">Apply Central Force (Sand)</button>
+        <button class="control-button" id="resetCameraButton">Reset Camera</button>
+    </div>
+
+    <script type="module">
+        // --- Imports ---
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { createNoise3D } from 'simplex-noise';
+        import { GPUComputationRenderer } from 'three/addons/misc/GPUComputationRenderer.js'; // *** ADDED ***
+        import { SimplexNoise } from 'three/addons/math/SimplexNoise.js'; // *** ADDED ***
+
+        // --- Constants ---
+        const REFLECTION_RESOLUTION = 128;
+        const REFLECTION_UPDATE_INTERVAL = 10;
+        const SHADOW_MAP_SIZE = 1024;
+        const PARTICLE_BASE_SPEED = 0.02;
+        const TREE_HEIGHT_VARIANCE = 2;
+        const SPARKLE_OSCILLATION_STRENGTH = 0.05;
+        const SPARKLE_OSCILLATION_SPEED = 3.5;
+        const SPARKLE_BASE_OFFSET_Y = 0.05;
+        const TRUNK_PARTICLE_RATIO = 0.2;
+        const LEAF_PARTICLE_RATIO = 1.0 - TRUNK_PARTICLE_RATIO;
+        const TRUNK_RADIUS_FACTOR = 0.08;
+        const LEAF_CLUSTER_SHAPE_FACTOR_Y = 0.6;
+        const PARTICLE_TYPE_TRUNK = 0.0;
+        const PARTICLE_TYPE_LEAF = 1.0;
+        const PARTICLE_TYPE_GRASS = 2.0;
+        const PARTICLE_TYPE_FLOWER = 3.0;
+        const FLOWER_BOB_STRENGTH = 0.03;
+        const FLOWER_BOB_SPEED = 1.2;
+        const MAX_PARTICLES = 300000;
+
+        // --- GPGPU Water Constants --- // *** ADDED ***
+        const GPGPU_WIDTH = 128; // Resolution of the water simulation (power of 2 recommended) - Adjust for performance/quality
+        let BOUNDS = 100; // Will be set from terrain size
+        let BOUNDS_HALF = 50;
+
+        // --- Shader Definitions for GPGPU Water --- // *** ADDED ***
+         const shaderChange = {
+             // Heightmap Calculation Shader (content is in HTML script tag)
+             heightmap_frag: document.getElementById( 'heightmapFragmentShader' ).textContent,
+             // Smoothing Shader (content is in HTML script tag)
+             smooth_frag: document.getElementById( 'smoothFragmentShader' ).textContent,
+
+             // Vertex Shader Modifications for WaterMaterial
+             beginnormal_vertex: /* glsl */`
+                // Calculate cell size in UV space based on GPGPU texture resolution
+                vec2 cellSize = vec2( 1.0 / ${GPGPU_WIDTH.toFixed( 1 )}, 1.0 / ${GPGPU_WIDTH.toFixed( 1 )} );
+
+                // Calculate normal using heightmap lookups
+                // Note the Y and Z components are swapped because the plane is rotated X-down
+                vec3 objectNormal = normalize( vec3(
+                    ( texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) ).x - texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) ).x ) * ${GPGPU_WIDTH.toFixed( 1 )} / BOUNDS, // dH/dx
+                    1.0, // Up vector component in object space (after rotation)
+                    ( texture2D( heightmap, uv + vec2( 0.0, - cellSize.y ) ).x - texture2D( heightmap, uv + vec2( 0.0, cellSize.y ) ).x ) * ${GPGPU_WIDTH.toFixed( 1 )} / BOUNDS // dH/dz (in world space)
+                ));
+
+                // Standard tangent calculation
+                #ifdef USE_TANGENT
+                    vec3 objectTangent = vec3( tangent.xyz );
+                #endif
+                `,
+             begin_vertex: /* glsl */`
+                // Read height value from the heightmap texture (x component stores current height)
+                float heightValue = texture2D( heightmap, uv ).x;
+
+                // Modify the vertex's Y position (plane is rotated flat on XZ, so Y is up)
+                vec3 transformed = vec3( position.x, position.y + heightValue, position.z ); // Apply height to Y
+
+                // Standard alpha hash calculation (if used)
+                #ifdef USE_ALPHAHASH
+                    vPosition = vec3( position ); // Use original position for alpha hash? Or transformed? Check original example if needed.
+                #endif
+                `,
+         };
+
+         // --- Custom Water Material (GPGPU) --- // *** ADDED ***
+         class WaterMaterial extends THREE.MeshStandardMaterial {
+            constructor( parameters ) {
+                super();
+                // Define constants used in the shader modifications
+                this.defines = {
+                    'STANDARD': '', 'USE_UV': '',
+                    'WIDTH': GPGPU_WIDTH.toFixed( 1 ),
+                    'BOUNDS': BOUNDS.toFixed( 1 ), // Initialize with default BOUNDS
+                };
+                this.userData.heightmap = null; // Property to hold the GPGPU texture
+                this.setValues( parameters );
+             }
+             // Custom property accessor for heightmap
+             get heightmap() { return this.userData.heightmap; }
+             set heightmap( v ) {
+                this.userData.heightmap = v;
+                if( this.userData.shader ) this.userData.shader.uniforms.heightmap.value = this.userData.heightmap;
+             }
+
+             onBeforeCompile( shader ){
+                 // Add the heightmap uniform
+                 shader.uniforms.heightmap = { value: this.userData.heightmap };
+
+                 // Inject shader snippets
+                 shader.vertexShader = 'uniform sampler2D heightmap;\n' + shader.vertexShader; // Add uniform declaration
+                 shader.vertexShader = shader.vertexShader.replace( '#include <beginnormal_vertex>', shaderChange.beginnormal_vertex );
+                 shader.vertexShader = shader.vertexShader.replace( '#include <begin_vertex>', shaderChange.begin_vertex );
+
+                 this.userData.shader = shader; // Store shader reference for later uniform updates
+                 // Update BOUNDS define in shader if it changed
+                 shader.defines.BOUNDS = BOUNDS.toFixed( 1 );
+             }
+         }
+
+
+        // --- Module Scope Variables ---
+        let scene, camera, renderer, controls, clock, noise3D;
+        let particles, particleGeometry, particleMaterial; // Sand particles
+        let waterMesh, waterGeometry, waterMaterial; // WATER: Uses new WaterMaterial
+        // REMOVED: let baseWaterHeights, waterDisplacements, waterVelocities;
+        // REMOVED: let waterSegments, waterVertexCount; // Now driven by GPGPU_WIDTH
+        let terrainMesh, terrainGeometry, terrainMaterial;
+        let sky, dirLight;
+        let cubeCamera, cubeRenderTarget;
+        let particleCount = 15000; // Sand particle count
+        const velocities = []; // Sand particle velocities (Still CPU based)
+        let frameCounter = 0; // Used for reflection map update interval
+        let gpgpuFrameCounter = 0; // Used for GPGPU update interval
+        let TERRAIN_SIZE = 100;
+        let TERRAIN_HALF_SIZE;
+        let TERRAIN_SEGMENTS = 100;
+
+        // GPGPU Water Variables // *** ADDED ***
+        let gpuCompute;
+        let heightmapVariable;
+        let smoothShader;
+        let meshRay; // Helper plane for water raycasting
+        let waterMousePos = new THREE.Vector2( 10000, 10000 ); // Position outside bounds initially
+        let isPointerDownWater = false; // Separate flag for water interaction? Or combine logic. Let's try combining.
+        const simplex = new SimplexNoise(); // For initial water noise fill
+
+
+        // --- Particle Vegetation Variables ---
+        let vegetationParticles, vegetationParticleGeometry, vegetationParticleMaterial;
+        let totalVegetationParticles = 0;
+        const vegetationUniforms = {
+            uTime: { value: 0.0 }, uLeafSwayStrength: { value: 0.2 }, uLeafSwaySpeed: { value: 1.0 },
+            uGrassSwayStrength: { value: 0.15 }, uGrassSwaySpeed: { value: 1.5 }, uBaseGrassHeight: { value: 0.6 },
+            uFlowerBobStrength: { value: FLOWER_BOB_STRENGTH }, uFlowerBobSpeed: { value: FLOWER_BOB_SPEED },
+            uSize: { value: 0.20 }
+        };
+
+        // Water Sparkle Variables
+        let sparkleParticles, sparkleGeometry, sparkleMaterial;
+        let sparkleInitialPositions = []; // Store vec3 for initial place
+        let sparkleAnimOffsets = [];
+
+        // Reusable Objects
+        const tempVec3 = new THREE.Vector3(); const tempVec3b = new THREE.Vector3(); const tempVec3c = new THREE.Vector3();
+        const tempVec2a = new THREE.Vector2(); const tempVec2b = new THREE.Vector2();
+        const tempColor = new THREE.Color();
+        const lowColorCache = new THREE.Color(); const highColorCache = new THREE.Color(); const trunkColorCache = new THREE.Color();
+        const leafColorCache = new THREE.Color(); const grassColorCache = new THREE.Color(); const flowerColor1Cache = new THREE.Color(); const flowerColor2Cache = new THREE.Color();
+        const pointer = new THREE.Vector2(); // For general interaction
+        const raycaster = new THREE.Raycaster();
+
+        // --- Terrain Modification Variables ---
+        let isPointerDown = false;
+        let isShiftDown = false;
+        let modificationRadius = 5.0;
+        let modificationStrength = 0.1;
+
+        // --- DOM Elements (Cached) ---
+        // (Keep existing DOM element caches)
+        const particleCountInput = document.getElementById('particleCountInput');
+        const baseWaterLevelInput = document.getElementById('baseWaterLevelInput');
+        const fogNearInput = document.getElementById('fogNearInput');
+        const fogFarInput = document.getElementById('fogFarInput');
+        const skyColorInput = document.getElementById('skyColorInput');
+        const waterColorInput = document.getElementById('waterColorInput'); // Still used for WaterMaterial base color
+        const gravityInput = document.getElementById('gravityInput');
+        const particleSizeInput = document.getElementById('particleSizeInput'); // Sand size
+        const lowColorInput = document.getElementById('lowColorInput');
+        const highColorInput = document.getElementById('highColorInput');
+        const colorMinHeightInput = document.getElementById('colorMinHeightInput');
+        const colorMaxHeightInput = document.getElementById('colorMaxHeightInput');
+        const terrainSizeInput = document.getElementById('terrainSizeInput');
+        const terrainSegmentsInput = document.getElementById('terrainSegmentsInput');
+        const terrainHeightScaleInput = document.getElementById('terrainHeightScaleInput');
+        const terrainFrequencyInput = document.getElementById('terrainFrequencyInput');
+        const terrainColorInput = document.getElementById('terrainColorInput');
+        const particleTreeCountInput = document.getElementById('particleTreeCountInput');
+        const particlesPerTreeInput = document.getElementById('particlesPerTreeInput');
+        const treeHeightInput = document.getElementById('treeHeightInput');
+        const leafClusterSizeInput = document.getElementById('leafClusterSizeInput');
+        const leafColorInput = document.getElementById('leafColorInput');
+        const trunkColorInput = document.getElementById('trunkColorInput');
+        const treeSwayStrengthInput = document.getElementById('treeSwayStrengthInput');
+        const treeSwaySpeedInput = document.getElementById('treeSwaySpeedInput');
+        const vegetationParticleSizeInput = document.getElementById('vegetationParticleSizeInput');
+        const grassDensityInput = document.getElementById('grassDensityInput');
+        const flowerDensityInput = document.getElementById('flowerDensityInput');
+        const grassHeightInput = document.getElementById('grassHeightInput');
+        const flowerHeightInput = document.getElementById('flowerHeightInput');
+        const grassColorInput = document.getElementById('grassColorInput');
+        const flowerColor1Input = document.getElementById('flowerColor1Input');
+        const flowerColor2Input = document.getElementById('flowerColor2Input');
+        const grassSwayStrengthInput = document.getElementById('grassSwayStrengthInput');
+        const grassSwaySpeedInput = document.getElementById('grassSwaySpeedInput');
+        // REMOVED: const waterSegmentsInput = document.getElementById('waterSegmentsInput');
+        // REMOVED: const waveSpreadInput = document.getElementById('waveSpreadInput');
+        // REMOVED: const waveDampingInput = document.getElementById('waveDampingInput');
+        const sparkleCountInput = document.getElementById('sparkleCountInput');
+        const sparkleSizeInput = document.getElementById('sparkleSizeInput');
+        const sparkleColorInput = document.getElementById('sparkleColorInput');
+        const modificationRadiusInput = document.getElementById('modificationRadiusInput');
+        const modificationStrengthInput = document.getElementById('modificationStrengthInput');
+        // GPGPU Water Controls DOM Elements
+        const waterMouseSizeInput = document.getElementById('waterMouseSizeInput');
+        const waterDeepInput = document.getElementById('waterDeepInput');
+        const waterViscosityInput = document.getElementById('waterViscosityInput');
+        const waterSpeedInput = document.getElementById('waterSpeedInput');
+        const waterMouseSizeValue = document.getElementById('waterMouseSizeValue');
+        const waterDeepValue = document.getElementById('waterDeepValue');
+        const waterViscosityValue = document.getElementById('waterViscosityValue');
+        const waterSpeedValue = document.getElementById('waterSpeedValue');
+
+
+        // --- Utility Functions ---
+        function lerp(a, b, t) { return a + (b - a) * t; }
+
+
+        // --- GPGPU Water Utility Functions --- // *** ADDED/ADAPTED ***
+        function fillTexture( texture ) {
+            // Fill the heightmap texture with noise (from first code)
+            const waterMaxHeightInitial = 0.05; // Small initial noise
+            function noise( x, y, z ) {
+                let multR = waterMaxHeightInitial;
+                let mult = 0.025;
+                let r = 0;
+                for ( let i = 0; i < 10; i ++ ) { // Reduced iterations for faster init
+                    r += multR * simplex.noise3d( x * mult, y * mult, z * mult ); // Use 3D noise for variation
+                    multR *= 0.53 + 0.025 * i;
+                    mult *= 1.25;
+                }
+                return r;
+            }
+
+            const pixels = texture.image.data; // RGBA Float texture
+            let p = 0;
+            for ( let j = 0; j < GPGPU_WIDTH; j ++ ) {
+                for ( let i = 0; i < GPGPU_WIDTH; i ++ ) {
+                    const x = i * 128 / GPGPU_WIDTH; // Scale coordinates for noise input
+                    const y = j * 128 / GPGPU_WIDTH;
+                    const noiseVal = noise( x, y, 0 ); // Get noise value
+                    pixels[ p + 0 ] = noiseVal; // Current height (R channel)
+                    pixels[ p + 1 ] = noiseVal; // Previous height (G channel) - start flat
+                    pixels[ p + 2 ] = 0; // B channel unused
+                    pixels[ p + 3 ] = 1; // A channel unused (usually)
+                    p += 4;
+                }
+            }
+         }
+
+        function smoothWater() {
+             // Smooth the water heightmap (from first code)
+             if (!gpuCompute || !heightmapVariable || !smoothShader) {
+                 console.warn("Cannot smooth water, GPGPU not set up correctly.");
+                 return;
+             }
+             const currentRenderTarget = gpuCompute.getCurrentRenderTarget( heightmapVariable );
+             const alternateRenderTarget = gpuCompute.getAlternateRenderTarget( heightmapVariable );
+
+             // Ensure the smooth shader has the correct texture resolution uniform
+             smoothShader.uniforms[ 'resolution' ].value.set( GPGPU_WIDTH, GPGPU_WIDTH );
+
+             for ( let i = 0; i < 5; i ++ ) { // Reduced smoothing iterations
+                 smoothShader.uniforms[ 'smoothTexture' ].value = currentRenderTarget.texture;
+                 gpuCompute.doRenderTarget( smoothShader, alternateRenderTarget );
+
+                 smoothShader.uniforms[ 'smoothTexture' ].value = alternateRenderTarget.texture;
+                 gpuCompute.doRenderTarget( smoothShader, currentRenderTarget );
+             }
+         }
+
+         function updateWaterUniforms() {
+            // Update GPGPU uniforms from control values
+            if (heightmapVariable) {
+                heightmapVariable.material.uniforms[ 'mouseSize' ].value = parseFloat(waterMouseSizeInput.value);
+                heightmapVariable.material.uniforms[ 'deep' ].value = parseFloat(waterDeepInput.value);
+                heightmapVariable.material.uniforms[ 'viscosity' ].value = parseFloat(waterViscosityInput.value);
+                // mousePos is updated in raycastWaterInteraction
+            }
+            // Update slider text displays
+            if(waterMouseSizeValue) waterMouseSizeValue.textContent = parseFloat(waterMouseSizeInput.value).toFixed(2);
+            if(waterDeepValue) waterDeepValue.textContent = parseFloat(waterDeepInput.value).toFixed(3);
+            if(waterViscosityValue) waterViscosityValue.textContent = parseFloat(waterViscosityInput.value).toFixed(3);
+            if(waterSpeedValue) waterSpeedValue.textContent = parseInt(waterSpeedInput.value);
+         }
+
+
+        // --- Initialization ---
+        function init() {
+            console.log("Initializing simulation...");
+            try { // Added basic try-catch for init
+                // Read initial values
+                TERRAIN_SIZE = parseFloat(terrainSizeInput.value);
+                BOUNDS = TERRAIN_SIZE; // *** Link GPGPU BOUNDS to Terrain Size ***
+                BOUNDS_HALF = BOUNDS / 2;
+                TERRAIN_HALF_SIZE = TERRAIN_SIZE / 2;
+                TERRAIN_SEGMENTS = parseInt(terrainSegmentsInput.value);
+                // REMOVED: waterSegments = parseInt(waterSegmentsInput.value);
+                // REMOVED: waterVertexCount = (waterSegments + 1) * (waterSegments + 1);
+                modificationRadius = parseFloat(modificationRadiusInput.value);
+                modificationStrength = parseFloat(modificationStrengthInput.value);
+
+                noise3D = createNoise3D();
+                if (!noise3D) throw new Error("Failed to create noise function.");
+
+                scene = new THREE.Scene();
+                scene.background = null; // Transparent background for manual skybox
+                scene.fog = new THREE.Fog(skyColorInput.value, parseFloat(fogNearInput.value), parseFloat(fogFarInput.value));
+
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, TERRAIN_SIZE * 4);
+                camera.position.set(TERRAIN_HALF_SIZE * 0.8, TERRAIN_HALF_SIZE * 0.7, TERRAIN_HALF_SIZE * 0.8);
+                camera.lookAt(0, 0, 0);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.body.appendChild(renderer.domElement);
+
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true; controls.dampingFactor = 0.1; controls.maxPolarAngle = Math.PI / 2.05;
+                controls.target.set(0, 0, 0); controls.maxDistance = TERRAIN_SIZE * 1.5; controls.update();
+
+                // Skybox
+                const skyGeometry = new THREE.SphereGeometry(TERRAIN_SIZE * 2, 32, 16);
+                const skyMaterial = new THREE.MeshBasicMaterial({ color: skyColorInput.value, side: THREE.BackSide, depthWrite: false });
+                sky = new THREE.Mesh(skyGeometry, skyMaterial); sky.renderOrder = -1; sky.name = 'sky'; scene.add(sky);
+
+                // Reflection Cube Camera
+                cubeRenderTarget = new THREE.WebGLCubeRenderTarget(REFLECTION_RESOLUTION, {
+                    format: THREE.RGBAFormat, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+                cubeCamera = new THREE.CubeCamera(1, TERRAIN_SIZE * 4, cubeRenderTarget);
+
+                // Initialize Particle Vegetation Material (ShaderMaterial) - Unchanged from original 'second' code
+                vegetationParticleMaterial = new THREE.ShaderMaterial({
+                    uniforms: vegetationUniforms,
+                    vertexShader: `
+                        uniform float uTime; uniform float uSize; uniform float uLeafSwayStrength; uniform float uLeafSwaySpeed;
+                        uniform float uGrassSwayStrength; uniform float uGrassSwaySpeed; uniform float uBaseGrassHeight;
+                        uniform float uFlowerBobStrength; uniform float uFlowerBobSpeed;
+                        attribute float particleType; attribute vec3 targetPosition; attribute float animOffset;
+                        varying vec3 vColor;
+                        const float PARTICLE_TYPE_TRUNK = ${PARTICLE_TYPE_TRUNK.toFixed(1)}; const float PARTICLE_TYPE_LEAF = ${PARTICLE_TYPE_LEAF.toFixed(1)};
+                        const float PARTICLE_TYPE_GRASS = ${PARTICLE_TYPE_GRASS.toFixed(1)}; const float PARTICLE_TYPE_FLOWER = ${PARTICLE_TYPE_FLOWER.toFixed(1)};
+                        const float LEAF_CLUSTER_SHAPE_FACTOR_Y = ${LEAF_CLUSTER_SHAPE_FACTOR_Y.toFixed(1)};
+
+                        void main() {
+                            vColor = color; vec3 basePos = position; vec3 animatedPos = basePos;
+                            if (particleType == PARTICLE_TYPE_LEAF) {
+                                float swayX = sin(uTime * uLeafSwaySpeed + animOffset) * uLeafSwayStrength;
+                                float swayZ = cos(uTime * uLeafSwaySpeed * 0.7 + animOffset * 1.5) * uLeafSwayStrength;
+                                animatedPos = basePos + targetPosition + vec3(swayX, 0.0, swayZ);
+                             } else if (particleType == PARTICLE_TYPE_GRASS) {
+                                float swayInfluence = sin(uTime * uGrassSwaySpeed + animOffset); float swayX = swayInfluence * uGrassSwayStrength;
+                                float bendFactor = abs(swayInfluence) * 0.6; float bendAmount = uBaseGrassHeight * bendFactor;
+                                float currentHeightRatio = clamp( (position.y - targetPosition.y + uBaseGrassHeight) / max(uBaseGrassHeight, 0.1), 0.0, 1.0);
+                                vec3 swayOffset = vec3(swayX * currentHeightRatio, -bendAmount * currentHeightRatio, 0.0);
+                                animatedPos = position + swayOffset;
+                             } else if (particleType == PARTICLE_TYPE_FLOWER) {
+                                float bob = sin(uTime * uFlowerBobSpeed + animOffset) * uFlowerBobStrength;
+                                animatedPos = position + vec3(0.0, bob, 0.0);
+                             }
+                            vec4 mvPosition = modelViewMatrix * vec4(animatedPos, 1.0);
+                            gl_Position = projectionMatrix * mvPosition;
+                            gl_PointSize = uSize * ( 300.0 / -mvPosition.z );
+                        }`,
+                    fragmentShader: `
+                        varying vec3 vColor;
+                        void main() {
+                            float distanceToCenter = length(gl_PointCoord - vec2(0.5));
+                            if (distanceToCenter > 0.5) { discard; }
+                            gl_FragColor = vec4(vColor, 1.0);
+                        }`,
+                    vertexColors: true, transparent: true, depthWrite: false, depthTest: true, blending: THREE.NormalBlending,
+                });
+
+                // Initial Generation
+                generateTerrain();
+                generateVegetationParticles();
+                initWater();         // *** Use NEW water init ***
+                generateParticles(); // Sand
+                generateSparkles();  // After water
+
+                // *** Setup GPGPU AFTER renderer is created ***
+                setupGPGPU();
+
+                // Lighting (Unchanged)
+                const hemiLight = new THREE.HemisphereLight(0x88ccff, 0x444422, 0.7); scene.add(hemiLight);
+                dirLight = new THREE.DirectionalLight(0xffffff, 1.2); dirLight.castShadow = true;
+                dirLight.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE); dirLight.shadow.bias = -0.0005;
+                const shadowCamSize = TERRAIN_HALF_SIZE * 1.3;
+                dirLight.shadow.camera = new THREE.OrthographicCamera(-shadowCamSize, shadowCamSize, shadowCamSize, -shadowCamSize, 0.1, TERRAIN_SIZE * 3);
+                dirLight.position.set(TERRAIN_HALF_SIZE * 1.5, TERRAIN_HALF_SIZE * 2.0, 0); dirLight.target.position.set(0, 0, 0);
+                scene.add(dirLight); scene.add(dirLight.target);
+
+                clock = new THREE.Clock();
+                setupEventListeners();
+                updateWaterUniforms(); // Set initial GPGPU uniform values from controls
+                updateReflectionMap(true);
+                animate();
+
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                const errorDiv = document.createElement('div');
+				errorDiv.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:red; background:white; padding:20px; border:1px solid black; z-index: 101; font-family: monospace; white-space: pre-wrap;';
+				errorDiv.textContent = 'An error occurred during initialization.\nCheck the console (F12) for details.\n\nError: ' + (error?.message || JSON.stringify(error));
+				document.body.appendChild(errorDiv);
+            }
+        }
+
+        // --- Control Update Functions ---
+        function updateFog() { if (scene.fog) { scene.fog.color.set(skyColorInput.value); scene.fog.near = parseFloat(fogNearInput.value); scene.fog.far = parseFloat(fogFarInput.value); } }
+        function updateSkyColor() { if (sky?.material) { sky.material.color.set(skyColorInput.value); if (scene.fog) scene.fog.color.set(skyColorInput.value); updateReflectionMap(true); } }
+        function updateParticleSize() { if (particleMaterial) particleMaterial.size = Math.max(0.01, parseFloat(particleSizeInput.value)); } // Sand
+        function updateWaterColor() {
+             // Update the base color of the GPGPU WaterMaterial
+             if (waterMaterial instanceof WaterMaterial) {
+                waterMaterial.color.set(waterColorInput.value);
+             }
+         }
+        function updateTerrainColor() { if (terrainMaterial) { terrainMaterial.color.set(terrainColorInput.value); updateReflectionMap(true); } }
+        function updateSparkleMaterial() { if (sparkleMaterial) { sparkleMaterial.size = Math.max(0.01, parseFloat(sparkleSizeInput.value)); sparkleMaterial.color.set(sparkleColorInput.value); } }
+        function updateVegetationParticleSize() { if (vegetationParticleMaterial) { vegetationUniforms.uSize.value = Math.max(0.01, parseFloat(vegetationParticleSizeInput.value)); } }
+        function updateVegetationParticleColors() {
+             if (!vegetationParticles || !vegetationParticleGeometry || !vegetationParticleGeometry.attributes.color || !vegetationParticleGeometry.attributes.particleType) return;
+             const colors = vegetationParticleGeometry.attributes.color.array; const types = vegetationParticleGeometry.attributes.particleType.array;
+             trunkColorCache.set(trunkColorInput.value); leafColorCache.set(leafColorInput.value); grassColorCache.set(grassColorInput.value); flowerColor1Cache.set(flowerColor1Input.value); flowerColor2Cache.set(flowerColor2Input.value);
+             for (let i = 0; i < totalVegetationParticles; i++) {
+                 const idx = i * 3; const type = types[i]; let colorToUse = tempColor;
+                 if (type === PARTICLE_TYPE_TRUNK) colorToUse = trunkColorCache; else if (type === PARTICLE_TYPE_LEAF) colorToUse = leafColorCache;
+                 else if (type === PARTICLE_TYPE_GRASS) colorToUse = grassColorCache; else if (type === PARTICLE_TYPE_FLOWER) colorToUse = (i % 2 === 0) ? flowerColor1Cache : flowerColor2Cache;
+                 colors[idx] = colorToUse.r; colors[idx + 1] = colorToUse.g; colors[idx + 2] = colorToUse.b;
+             }
+             vegetationParticleGeometry.attributes.color.needsUpdate = true; updateReflectionMap(true);
+         }
+
+        // REMOVED: function resetWaterState() - GPGPU state managed internally
+
+        // --- Pointer/Mouse Interaction ---
+        function updatePointerCoords(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function onPointerDown(event) {
+             const controlsContainer = document.querySelector('.controls-container');
+             if (controlsContainer && controlsContainer.contains(event.target)) return;
+             if (!renderer || !camera || !raycaster /*|| controls.enabled === false*/) return; // Allow interaction even if controls were briefly disabled
+
+             isPointerDown = true;
+             isShiftDown = event.shiftKey;
+             updatePointerCoords(event);
+             handleInteraction(pointer); // Unified interaction handler
+         }
+
+         function onPointerMove(event) {
+              if (!isPointerDown || !renderer || !camera || !raycaster ) return; // Removed controls.enabled check here
+
+              updatePointerCoords(event);
+              handleInteraction(pointer); // Unified interaction handler
+         }
+
+         function onPointerUp(event) {
+             isPointerDown = false;
+             isShiftDown = false;
+             // Reset water mouse position when pointer is up
+             if (heightmapVariable) {
+                heightmapVariable.material.uniforms[ 'mousePos' ].value.set( 10000, 10000 ); // Move mouse out of bounds
+             }
+             // Re-enable controls if they were disabled
+             if (!controls.enabled) {
+                 controls.enabled = true;
+             }
+         }
+
+        function onKeyDown(event) { if (event.key === 'Shift') isShiftDown = true; }
+        function onKeyUp(event) { if (event.key === 'Shift') isShiftDown = false; }
+
+        // *** MODIFIED Interaction Handler ***
+        function handleInteraction(pointerCoords) {
+            if (!raycaster || !camera) return;
+
+            raycaster.setFromCamera(pointerCoords, camera);
+
+            let terrainInteractionDone = false;
+            let waterInteractionDone = false;
+
+            // 1. Try Terrain Interaction
+            if (terrainMesh) {
+                const intersectsTerrain = raycaster.intersectObject(terrainMesh, false);
+                if (intersectsTerrain.length > 0) {
+                    if (isPointerDown) { // Only modify terrain if pointer is down
+                        controls.enabled = false; // Disable controls WHILE modifying terrain
+                        modifyTerrain(intersectsTerrain[0].point, isShiftDown);
+                        terrainInteractionDone = true;
+                    }
+                    // Even if not modifying, hitting terrain prevents water interaction below it
+                     waterInteractionDone = true; // Prevent water interaction if terrain is hit directly
+                }
+            }
+
+            // 2. Try Water Interaction (only if terrain wasn't hit/modified and pointer is down)
+            if (!terrainInteractionDone && isPointerDown && meshRay && heightmapVariable) { // Check meshRay exists
+                const intersectsWaterPlane = raycaster.intersectObject(meshRay, false); // Raycast against helper plane
+                if (intersectsWaterPlane.length > 0) {
+                    const point = intersectsWaterPlane[0].point;
+                    // Map the intersection point (world coords) to the GPGPU texture coords/uniform space
+                    // The uniform expects coordinates relative to the center, scaled by BOUNDS? Check shader.
+                    // Shader: ( uv - vec2( 0.5 ) ) * BOUNDS - vec2( mousePos.x, - mousePos.y )
+                    // So, mousePos should be in world coords relative to the center (0,0) of the water plane.
+                    waterMousePos.set( point.x, point.z ); // Direct world coords (plane centered at origin)
+                    heightmapVariable.material.uniforms[ 'mousePos' ].value.copy( waterMousePos );
+                    if (controls.enabled) controls.enabled = false; // Disable controls while disturbing water
+                    waterInteractionDone = true;
+                }
+            }
+
+            // If pointer is down but neither terrain nor water was interacted with, maybe keep controls disabled? Optional.
+
+            // If pointer is down and *nothing* was hit, reset water mouse position
+            if (isPointerDown && !terrainInteractionDone && !waterInteractionDone && heightmapVariable) {
+                 heightmapVariable.material.uniforms[ 'mousePos' ].value.set( 10000, 10000 );
+            }
+        }
+
+
+        // --- Geometry Generation Functions ---
+        function generateTerrain() {
+            // (Terrain generation code unchanged)
+             if (terrainMesh) { scene.remove(terrainMesh); terrainGeometry?.dispose(); }
+             TERRAIN_SIZE = parseFloat(terrainSizeInput.value); BOUNDS = TERRAIN_SIZE; BOUNDS_HALF = BOUNDS / 2.0; // *** Update GPGPU bounds ***
+             TERRAIN_HALF_SIZE = TERRAIN_SIZE / 2; TERRAIN_SEGMENTS = Math.max(10, parseInt(terrainSegmentsInput.value));
+             const terrainHeightScale = parseFloat(terrainHeightScaleInput.value); const terrainFrequency = parseFloat(terrainFrequencyInput.value);
+             const terrainBaseOffset = 0;
+             terrainGeometry = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGMENTS, TERRAIN_SEGMENTS); terrainGeometry.rotateX(-Math.PI / 2);
+             const pos = terrainGeometry.attributes.position.array; if (!noise3D) { console.error("Noise unavailable."); return; }
+             for (let i = 0; i < pos.length / 3; i++) { const x = pos[i * 3]; const z = pos[i * 3 + 2]; const height = noise3D(x * terrainFrequency, z * terrainFrequency, 0) * terrainHeightScale; pos[i * 3 + 1] = terrainBaseOffset + height; }
+             terrainGeometry.computeVertexNormals();
+             if (!terrainMaterial) { terrainMaterial = new THREE.MeshStandardMaterial({ color: terrainColorInput.value, metalness: 0.1, roughness: 0.8, side: THREE.FrontSide }); }
+             else { terrainMaterial.color.set(terrainColorInput.value); }
+             terrainMesh = new THREE.Mesh(terrainGeometry, terrainMaterial); terrainMesh.receiveShadow = true; terrainMesh.castShadow = true; terrainMesh.name = 'terrain_surface'; scene.add(terrainMesh);
+             const shadowCamSize = TERRAIN_HALF_SIZE * 1.3;
+             if (dirLight?.shadow.camera instanceof THREE.OrthographicCamera) { dirLight.shadow.camera.left = -shadowCamSize; dirLight.shadow.camera.right = shadowCamSize; dirLight.shadow.camera.top = shadowCamSize; dirLight.shadow.camera.bottom = -shadowCamSize; dirLight.shadow.camera.far = TERRAIN_SIZE * 3; dirLight.shadow.camera.updateProjectionMatrix(); }
+
+             // *** Update BOUNDS define in WaterMaterial if it exists ***
+             if (waterMaterial instanceof WaterMaterial) {
+                waterMaterial.defines.BOUNDS = BOUNDS.toFixed(1);
+                // We might need to force a recompile or update the shader directly if the material exists
+                if (waterMaterial.userData.shader) {
+                    waterMaterial.userData.shader.defines.BOUNDS = BOUNDS.toFixed(1);
+                    // waterMaterial.needsUpdate = true; // This might trigger recompile
+                }
+             }
+             // Update GPGPU shader define too
+             if(heightmapVariable) {
+                 heightmapVariable.material.defines.BOUNDS = BOUNDS.toFixed(1);
+             }
+        }
+
+        function generateVegetationParticles() {
+             // (Vegetation generation code largely unchanged - uses getTerrainHeight)
+            if (vegetationParticles) { scene.remove(vegetationParticles); vegetationParticleGeometry?.dispose(); } totalVegetationParticles = 0;
+            const treeCount = parseInt(particleTreeCountInput.value); const avgParticlesPerTree = parseInt(particlesPerTreeInput.value); const baseTreeHeight = parseFloat(treeHeightInput.value);
+            const leafClusterSize = parseFloat(leafClusterSizeInput.value); const grassDensity = parseFloat(grassDensityInput.value); const flowerDensity = parseFloat(flowerDensityInput.value);
+            const baseGrassHeight = parseFloat(grassHeightInput.value); const baseFlowerHeight = parseFloat(flowerHeightInput.value); const baseWaterLevel = parseFloat(baseWaterLevelInput.value);
+            if (!terrainGeometry || !terrainGeometry.attributes.position) { console.error("Terrain geometry not available."); return; }
+            const terrainPos = terrainGeometry.attributes.position.array; const terrainVertsAcross = TERRAIN_SEGMENTS + 1; const terrainGridSpacing = TERRAIN_SIZE / TERRAIN_SEGMENTS;
+            const estimatedTreeParticles = treeCount * avgParticlesPerTree; const terrainArea = TERRAIN_SIZE * TERRAIN_SIZE;
+            const estimatedGrassParticles = Math.floor(terrainArea * grassDensity); const estimatedFlowerParticles = Math.floor(terrainArea * flowerDensity);
+            let numParticlesToGenerate = Math.min(estimatedTreeParticles + estimatedGrassParticles + estimatedFlowerParticles, MAX_PARTICLES);
+            if (numParticlesToGenerate <= 0) { console.warn("No vegetation particles."); vegetationParticles = null; vegetationParticleGeometry = null; totalVegetationParticles = 0; return; }
+            vegetationParticleGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(numParticlesToGenerate * 3); const targetPositions = new Float32Array(numParticlesToGenerate * 3); const colors = new Float32Array(numParticlesToGenerate * 3);
+            const particleTypes = new Float32Array(numParticlesToGenerate); const animOffsets = new Float32Array(numParticlesToGenerate);
+            trunkColorCache.set(trunkColorInput.value); leafColorCache.set(leafColorInput.value); grassColorCache.set(grassColorInput.value); flowerColor1Cache.set(flowerColor1Input.value); flowerColor2Cache.set(flowerColor2Input.value);
+            let currentParticleIndex = 0;
+            function getTerrainHeight(x, z) { /* ... getTerrainHeight logic unchanged ... */
+                const gridX = (x + TERRAIN_HALF_SIZE) / terrainGridSpacing; const gridZ = (z + TERRAIN_HALF_SIZE) / terrainGridSpacing; const col0 = Math.floor(gridX); const row0 = Math.floor(gridZ);
+                if (col0 < 0 || col0 >= TERRAIN_SEGMENTS || row0 < 0 || row0 >= TERRAIN_SEGMENTS) return -Infinity;
+                const col1 = col0 + 1; const row1 = row0 + 1; const i00 = row0 * terrainVertsAcross + col0; const i10 = row0 * terrainVertsAcross + col1; const i01 = row1 * terrainVertsAcross + col0; const i11 = row1 * terrainVertsAcross + col1;
+                if (i11 * 3 + 1 < terrainPos.length) { const h00 = terrainPos[i00 * 3 + 1]; const h10 = terrainPos[i10 * 3 + 1]; const h01 = terrainPos[i01 * 3 + 1]; const h11 = terrainPos[i11 * 3 + 1]; const tx = gridX - col0; const tz = gridZ - row0; const h0 = THREE.MathUtils.lerp(h00, h10, tx); const h1 = THREE.MathUtils.lerp(h01, h11, tx); return THREE.MathUtils.lerp(h0, h1, tz); } else return -Infinity;
+            }
+            const numTreeParticlesToGenerate = Math.min(estimatedTreeParticles, numParticlesToGenerate - currentParticleIndex); const actualParticlesPerTree = (treeCount > 0 && numTreeParticlesToGenerate > 0) ? Math.floor(numTreeParticlesToGenerate / treeCount) : 0;
+            for (let i = 0; i < treeCount; i++) { /* ... tree generation logic unchanged ... */
+                if (currentParticleIndex >= numParticlesToGenerate || actualParticlesPerTree <= 0) break;
+                const treeX = (Math.random() - 0.5) * (TERRAIN_SIZE * 0.9); const treeZ = (Math.random() - 0.5) * (TERRAIN_SIZE * 0.9); const terrainY = getTerrainHeight(treeX, treeZ);
+                if (terrainY < baseWaterLevel) continue;
+                const currentTreeHeight = baseTreeHeight + (Math.random() - 0.5) * TREE_HEIGHT_VARIANCE; const trunkTopY = terrainY + currentTreeHeight;
+                const currentTrunkRadius = Math.max(0.1, currentTreeHeight * TRUNK_RADIUS_FACTOR); const numTrunkParticles = Math.floor(actualParticlesPerTree * TRUNK_PARTICLE_RATIO); const numLeafParticles = actualParticlesPerTree - numTrunkParticles;
+                for (let j = 0; j < numTrunkParticles; j++) { if (currentParticleIndex >= numParticlesToGenerate) break; const idx = currentParticleIndex * 3; const particleProgress = Math.random(); const particleY = terrainY + particleProgress * currentTreeHeight; const radiusScale = 1.0 - (particleProgress * 0.3); const angle = Math.random() * Math.PI * 2; const radius = Math.random() * currentTrunkRadius * radiusScale; const particleX = treeX + Math.cos(angle) * radius; const particleZ = treeZ + Math.sin(angle) * radius; positions[idx] = particleX; positions[idx + 1] = particleY; positions[idx + 2] = particleZ; targetPositions[idx] = 0; targetPositions[idx + 1] = 0; targetPositions[idx + 2] = 0; colors[idx] = trunkColorCache.r; colors[idx + 1] = trunkColorCache.g; colors[idx + 2] = trunkColorCache.b; particleTypes[currentParticleIndex] = PARTICLE_TYPE_TRUNK; animOffsets[currentParticleIndex] = 0; currentParticleIndex++; }
+                if (currentParticleIndex >= numParticlesToGenerate) break;
+                const leafAnchorPos = tempVec3.set(treeX, trunkTopY, treeZ);
+                for (let j = 0; j < numLeafParticles; j++) { if (currentParticleIndex >= numParticlesToGenerate) break; const idx = currentParticleIndex * 3; const phi = Math.acos(-1 + (2 * Math.random())); const theta = Math.random() * Math.PI * 2; const radius = Math.random() * leafClusterSize; const relativeX = Math.sin(phi) * Math.cos(theta) * radius; const relativeY = Math.cos(phi) * radius * LEAF_CLUSTER_SHAPE_FACTOR_Y - (leafClusterSize * LEAF_CLUSTER_SHAPE_FACTOR_Y * 0.3); const relativeZ = Math.sin(phi) * Math.sin(theta) * radius; positions[idx] = leafAnchorPos.x; positions[idx + 1] = leafAnchorPos.y; positions[idx + 2] = leafAnchorPos.z; targetPositions[idx] = relativeX; targetPositions[idx+1] = relativeY; targetPositions[idx+2] = relativeZ; colors[idx] = leafColorCache.r; colors[idx + 1] = leafColorCache.g; colors[idx + 2] = leafColorCache.b; particleTypes[currentParticleIndex] = PARTICLE_TYPE_LEAF; animOffsets[currentParticleIndex] = Math.random() * Math.PI * 2; currentParticleIndex++; }
+            }
+            const numGrassParticlesToGenerate = Math.min(estimatedGrassParticles, numParticlesToGenerate - currentParticleIndex);
+            for (let i = 0; i < numGrassParticlesToGenerate; i++) { /* ... grass generation logic unchanged ... */
+                if (currentParticleIndex >= numParticlesToGenerate) break; let attempts = 0; let grassX, grassZ, terrainY; let foundSpot = false; while(attempts < 10 && !foundSpot) { grassX = (Math.random() - 0.5) * TERRAIN_SIZE; grassZ = (Math.random() - 0.5) * TERRAIN_SIZE; terrainY = getTerrainHeight(grassX, grassZ); if(terrainY >= baseWaterLevel) foundSpot = true; attempts++; } if (!foundSpot) continue; const idx = currentParticleIndex * 3; const grassHeightVariance = baseGrassHeight * 0.4; const currentGrassHeight = baseGrassHeight + (Math.random() - 0.5) * grassHeightVariance; const tipY = terrainY + currentGrassHeight; positions[idx] = grassX; positions[idx + 1] = terrainY + 0.01; positions[idx + 2] = grassZ; targetPositions[idx] = grassX; targetPositions[idx+1] = tipY; targetPositions[idx+2] = grassZ; colors[idx] = grassColorCache.r; colors[idx + 1] = grassColorCache.g; colors[idx + 2] = grassColorCache.b; particleTypes[currentParticleIndex] = PARTICLE_TYPE_GRASS; animOffsets[currentParticleIndex] = Math.random() * Math.PI * 2; currentParticleIndex++;
+            }
+            const numFlowerParticlesToGenerate = Math.min(estimatedFlowerParticles, numParticlesToGenerate - currentParticleIndex);
+            for (let i = 0; i < numFlowerParticlesToGenerate; i++) { /* ... flower generation logic unchanged ... */
+                 if (currentParticleIndex >= numParticlesToGenerate) break; let attempts = 0; let flowerX, flowerZ, terrainY; let foundSpot = false; while(attempts < 10 && !foundSpot) { flowerX = (Math.random() - 0.5) * TERRAIN_SIZE; flowerZ = (Math.random() - 0.5) * TERRAIN_SIZE; terrainY = getTerrainHeight(flowerX, flowerZ); if(terrainY >= baseWaterLevel) foundSpot = true; attempts++; } if (!foundSpot) continue; const idx = currentParticleIndex * 3; const flowerHeightVariance = baseFlowerHeight * 0.3; const currentFlowerHeight = baseFlowerHeight + (Math.random() - 0.5) * flowerHeightVariance; const flowerHeadY = terrainY + currentFlowerHeight; positions[idx] = flowerX; positions[idx + 1] = flowerHeadY; positions[idx + 2] = flowerZ; targetPositions[idx] = 0; targetPositions[idx + 1] = 0; targetPositions[idx + 2] = 0; const flowerColor = (i % 2 === 0) ? flowerColor1Cache : flowerColor2Cache; colors[idx] = flowerColor.r; colors[idx + 1] = flowerColor.g; colors[idx + 2] = flowerColor.b; particleTypes[currentParticleIndex] = PARTICLE_TYPE_FLOWER; animOffsets[currentParticleIndex] = Math.random() * Math.PI * 2; currentParticleIndex++;
+            }
+            totalVegetationParticles = currentParticleIndex; console.log("Generated Vegetation Particles:", totalVegetationParticles);
+            if (totalVegetationParticles <= 0) { console.warn("Ending gen with 0 veg particles."); if (vegetationParticles) scene.remove(vegetationParticles); vegetationParticles = null; vegetationParticleGeometry = null; return; }
+            const finalPositions = (currentParticleIndex === numParticlesToGenerate) ? positions : positions.slice(0, totalVegetationParticles * 3); const finalTargets = (currentParticleIndex === numParticlesToGenerate) ? targetPositions : targetPositions.slice(0, totalVegetationParticles * 3); const finalColors = (currentParticleIndex === numParticlesToGenerate) ? colors : colors.slice(0, totalVegetationParticles * 3); const finalTypes = (currentParticleIndex === numParticlesToGenerate) ? particleTypes : particleTypes.slice(0, totalVegetationParticles); const finalOffsets = (currentParticleIndex === numParticlesToGenerate) ? animOffsets : animOffsets.slice(0, totalVegetationParticles);
+            vegetationParticleGeometry.setAttribute('position', new THREE.BufferAttribute(finalPositions, 3)); vegetationParticleGeometry.setAttribute('targetPosition', new THREE.BufferAttribute(finalTargets, 3)); vegetationParticleGeometry.setAttribute('color', new THREE.BufferAttribute(finalColors, 3)); vegetationParticleGeometry.setAttribute('particleType', new THREE.BufferAttribute(finalTypes, 1)); vegetationParticleGeometry.setAttribute('animOffset', new THREE.BufferAttribute(finalOffsets, 1));
+            vegetationUniforms.uLeafSwayStrength.value = parseFloat(treeSwayStrengthInput.value); vegetationUniforms.uLeafSwaySpeed.value = parseFloat(treeSwaySpeedInput.value); vegetationUniforms.uGrassSwayStrength.value = parseFloat(grassSwayStrengthInput.value); vegetationUniforms.uGrassSwaySpeed.value = parseFloat(grassSwaySpeedInput.value); vegetationUniforms.uBaseGrassHeight.value = parseFloat(grassHeightInput.value); vegetationUniforms.uSize.value = parseFloat(vegetationParticleSizeInput.value);
+            vegetationParticles = new THREE.Points(vegetationParticleGeometry, vegetationParticleMaterial); vegetationParticles.castShadow = false; vegetationParticles.receiveShadow = false; vegetationParticles.name = "vegetation_particles"; vegetationParticles.renderOrder = 0; scene.add(vegetationParticles);
+         }
+
+
+        // *** NEW/REPLACED: Initialize GPGPU Water ***
+        function initWater() {
+             if (waterMesh) {
+                 scene.remove(waterMesh);
+                 waterGeometry?.dispose();
+                 // Material is likely reused by GPGPU or re-created
+             }
+             if (meshRay) {
+                 scene.remove(meshRay); // Remove old helper plane
+                 meshRay.geometry?.dispose();
+                 meshRay.material?.dispose();
+             }
+
+             const baseWaterLevel = parseFloat(baseWaterLevelInput.value);
+
+             // *** Geometry MUST match GPGPU WIDTH for UV mapping ***
+             waterGeometry = new THREE.PlaneGeometry( BOUNDS, BOUNDS, GPGPU_WIDTH - 1, GPGPU_WIDTH - 1 );
+             waterGeometry.rotateX( - Math.PI / 2 ); // Lay flat on XZ
+
+             // Set initial Y position (optional, vertex shader will override)
+             const positions = waterGeometry.attributes.position.array;
+              for ( let i = 0, l = positions.length / 3; i < l; i ++ ) {
+                  positions[ i * 3 + 1 ] = baseWaterLevel;
+              }
+              waterGeometry.attributes.position.needsUpdate = true; // Might not be needed if shader overrides anyway
+
+
+             // *** Use the NEW WaterMaterial ***
+             waterMaterial = new WaterMaterial({
+                // Use properties similar to MeshPhysicalMaterial where applicable for visual parity
+                color: waterColorInput.value,
+                metalness: 0.1, // Adjust for desired look
+                roughness: 0.05, // Adjust for desired look
+                envMap: cubeRenderTarget.texture, // Assign reflection map
+                envMapIntensity: 0.7,
+                // GPGPU WaterMaterial doesn't inherently support transmission/thickness like MeshPhysicalMaterial
+                // Use opacity for transparency effects
+                transparent: true,
+                opacity: 0.90,
+                side: THREE.DoubleSide, // Render both sides
+                depthWrite: false, // Good for transparent water
+                depthTest: true,
+                defines: { // Ensure defines are set here too
+                    BOUNDS: BOUNDS.toFixed(1),
+                    WIDTH: GPGPU_WIDTH.toFixed(1)
+                }
+             });
+
+
+             waterMesh = new THREE.Mesh( waterGeometry, waterMaterial );
+             waterMesh.position.y = baseWaterLevel; // Set base level via position
+             waterMesh.receiveShadow = true;
+             waterMesh.castShadow = false; // Generally false for water
+             waterMesh.name = 'water_surface_gpgpu';
+             waterMesh.renderOrder = 1; // Render after vegetation, before sand/sparkles
+             scene.add( waterMesh );
+
+             // Helper Plane for Raycasting (invisible) - Place at water level
+             const geometryRay = new THREE.PlaneGeometry( BOUNDS, BOUNDS, 1, 1 );
+             meshRay = new THREE.Mesh( geometryRay, new THREE.MeshBasicMaterial( { color: 0xFFFFFF, visible: false, side: THREE.DoubleSide } ) );
+             meshRay.rotation.x = - Math.PI / 2;
+             meshRay.position.y = baseWaterLevel; // Position helper plane at water level
+             meshRay.matrixAutoUpdate = false;
+             meshRay.updateMatrix();
+             meshRay.name = 'water_raycast_helper';
+             scene.add( meshRay );
+          }
+
+          // *** NEW: Setup GPGPU Renderer ***
+          function setupGPGPU() {
+             if (gpuCompute) {
+                // Dispose existing? Or assume resetSimulation handles removal?
+                // For now, just return if already initialized. Reset needs care.
+                console.log("GPGPU already initialized.");
+                // Re-fill texture maybe?
+                // const heightmap0 = gpuCompute.createTexture(); // This might leak memory if not managed
+                // fillTexture(heightmap0);
+                // heightmapVariable.initialValueTexture = heightmap0; // Need a way to reset properly
+                // gpuCompute.init(); // Re-init might be needed
+                return;
+             }
+
+             try {
+                 gpuCompute = new GPUComputationRenderer( GPGPU_WIDTH, GPGPU_WIDTH, renderer );
+
+                 if ( gpuCompute.isSupported === false ) {
+                     console.error( 'GPUComputationRenderer not supported.' );
+                     alert('Error: Your GPU does not support Floating Point Textures, which are required for the water simulation. The water will not work.');
+                     gpuCompute = null; // Disable GPGPU features
+                     return;
+                 }
+
+                 // Create initial heightmap texture
+                 const heightmap0 = gpuCompute.createTexture();
+                 fillTexture( heightmap0 ); // Fill with initial noise
+
+
+                 // Add the heightmap variable using the fragment shader
+                 heightmapVariable = gpuCompute.addVariable( 'heightmap', shaderChange.heightmap_frag, heightmap0 );
+                 // Make the heightmap variable depend on itself (output feeds back as input)
+                 gpuCompute.setVariableDependencies( heightmapVariable, [ heightmapVariable ] );
+
+
+                 // Add uniforms to the heightmap fragment shader
+                 heightmapVariable.material.uniforms[ 'mousePos' ] = { value: new THREE.Vector2( 10000, 10000 ) }; // Initial mouse out of bounds
+                 heightmapVariable.material.uniforms[ 'mouseSize' ] = { value: parseFloat(waterMouseSizeInput.value) };
+                 heightmapVariable.material.uniforms[ 'viscosity' ] = { value: parseFloat(waterViscosityInput.value) };
+                 heightmapVariable.material.uniforms[ 'deep' ] = { value: parseFloat(waterDeepInput.value) };
+                 heightmapVariable.material.defines.BOUNDS = BOUNDS.toFixed( 1 ); // Pass BOUNDS constant
+
+
+                 // Create the smoothing shader material (optional)
+                 smoothShader = gpuCompute.createShaderMaterial( shaderChange.smooth_frag, {
+                     resolution: { value: new THREE.Vector2(GPGPU_WIDTH, GPGPU_WIDTH) }, // Pass resolution
+                     smoothTexture: { value: null }
+                 } );
+
+                 // Initialize the GPGPU computation
+                 const error = gpuCompute.init();
+                 if ( error !== null ) {
+                     console.error( 'GPGPU Initialization Error: ', error );
+                     throw new Error('GPGPU Init Failed: ' + error); // Throw to be caught by main init catch
+                 }
+                 console.log("GPGPU Initialized Successfully.");
+
+             } catch (error) {
+                console.error("Error during GPGPU setup:", error);
+                gpuCompute = null; heightmapVariable = null; smoothShader = null;
+                alert("Error setting up GPU Water Simulation. Check console (F12).");
+                // Optionally display error message in UI
+             }
+          }
+
+
+        function generateParticles() { // Sand Particles (Largely unchanged)
+            if (particles) { scene.remove(particles); particleGeometry?.dispose(); } velocities.length = 0;
+            particleCount = parseInt(particleCountInput.value); if (isNaN(particleCount) || particleCount <= 0) { console.warn("Invalid sand particle count."); particleCount = 0; particles = null; particleGeometry = null; return; }
+            particleGeometry = new THREE.BufferGeometry(); const particlePositions = new Float32Array(particleCount * 3); const particleColors = new Float32Array(particleCount * 3);
+            const initialLowCol = tempColor.set(lowColorInput.value).clone(); const initialHighCol = tempColor.set(highColorInput.value).clone(); const initialMinH = parseFloat(colorMinHeightInput.value); const initialMaxH = parseFloat(colorMaxHeightInput.value); const initialRangeH = Math.max(0.01, initialMaxH - initialMinH); const baseWaterLevel = parseFloat(baseWaterLevelInput.value);
+            for (let i = 0; i < particleCount; i++) { const idx = i * 3; const x = (Math.random() - 0.5) * TERRAIN_SIZE * 0.95; const y = baseWaterLevel + 5 + Math.random() * 15; const z = (Math.random() - 0.5) * TERRAIN_SIZE * 0.95; particlePositions[idx] = x; particlePositions[idx + 1] = y; particlePositions[idx + 2] = z; velocities.push(new THREE.Vector3((Math.random() - 0.5) * PARTICLE_BASE_SPEED, (Math.random() - 0.5) * PARTICLE_BASE_SPEED * 0.2, (Math.random() - 0.5) * PARTICLE_BASE_SPEED)); const normalizedHeight = THREE.MathUtils.clamp((y - initialMinH) / initialRangeH, 0, 1); tempColor.copy(initialLowCol).lerp(initialHighCol, normalizedHeight); particleColors[idx] = tempColor.r; particleColors[idx + 1] = tempColor.g; particleColors[idx + 2] = tempColor.b; }
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3)); particleGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+            if (!particleMaterial) { particleMaterial = new THREE.PointsMaterial({ size: Math.max(0.01, parseFloat(particleSizeInput.value)), transparent: true, opacity: 0.85, depthWrite: false, vertexColors: true, blending: THREE.NormalBlending, }); } else { particleMaterial.size = Math.max(0.01, parseFloat(particleSizeInput.value)); }
+            particles = new THREE.Points(particleGeometry, particleMaterial); particles.renderOrder = 2; particles.name = "sand_particle_system"; particles.castShadow = false; particles.receiveShadow = true; scene.add(particles);
+        }
+
+        function generateSparkles() { // Sparkles (Largely unchanged, but Y position update in animate is simplified)
+             if (sparkleParticles) { scene.remove(sparkleParticles); sparkleGeometry?.dispose(); } sparkleInitialPositions = []; sparkleAnimOffsets = [];
+             const count = parseInt(sparkleCountInput.value); if (isNaN(count) || count <= 0) { sparkleParticles = null; sparkleGeometry = null; return; }
+             sparkleGeometry = new THREE.BufferGeometry(); const positions = new Float32Array(count * 3); const baseWaterLevel = parseFloat(baseWaterLevelInput.value);
+             for (let i = 0; i < count; i++) { const idx = i * 3; const x = (Math.random() - 0.5) * TERRAIN_SIZE; const z = (Math.random() - 0.5) * TERRAIN_SIZE; const y = baseWaterLevel + SPARKLE_BASE_OFFSET_Y; positions[idx] = x; positions[idx + 1] = y; positions[idx + 2] = z; sparkleInitialPositions.push(new THREE.Vector3(x, baseWaterLevel + SPARKLE_BASE_OFFSET_Y, z)); sparkleAnimOffsets.push(Math.random() * Math.PI * 2); }
+             sparkleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+             if (!sparkleMaterial) { sparkleMaterial = new THREE.PointsMaterial({ size: parseFloat(sparkleSizeInput.value), color: sparkleColorInput.value, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, }); } else { updateSparkleMaterial(); }
+             sparkleParticles = new THREE.Points(sparkleGeometry, sparkleMaterial); sparkleParticles.renderOrder = 3; sparkleParticles.name = "water_sparkles"; sparkleParticles.castShadow = false; sparkleParticles.receiveShadow = false; scene.add(sparkleParticles);
+         }
+
+
+        // --- Simulation Action Functions ---
+        function resetSimulation() {
+            console.log("--- Resetting Simulation ---");
+
+            // Stop animation loop? Maybe not necessary.
+            // Dispose old GPGPU resources if they exist
+             if (gpuCompute) {
+                 // Need a proper dispose method if GPUComputationRenderer provides one,
+                 // otherwise manually dispose textures/materials?
+                 // For now, we'll just re-initialize, which might leak, but is simpler.
+                 // A robust solution would involve tracking and disposing render targets.
+                 console.log("Clearing GPGPU state (potential leak warning)...");
+                 gpuCompute = null; // Force re-creation in setupGPGPU
+                 heightmapVariable = null;
+                 smoothShader = null;
+             }
+
+
+            // Regenerate everything in order
+            generateTerrain();         // Regenerate terrain first (updates BOUNDS)
+            generateVegetationParticles();
+            initWater();             // Regenerate water (uses new BOUNDS)
+            setupGPGPU();            // Re-initialize GPGPU (uses new BOUNDS in defines)
+            generateParticles();     // Sand
+            generateSparkles();        // Sparkles
+
+            updateWaterUniforms(); // Re-apply control values to new GPGPU uniforms
+            updateReflectionMap(true); // Update reflection after scene changes
+            console.log("--- Simulation Reset Complete ---");
+        }
+
+        function resetCamera() { /* (resetCamera unchanged) */
+            if (!camera || !controls) return; camera.position.set(TERRAIN_HALF_SIZE * 0.8, TERRAIN_HALF_SIZE * 0.7, TERRAIN_HALF_SIZE * 0.8); controls.target.set(0, 0, 0); controls.update();
+        }
+
+        function applyCentralForce() { /* (applyCentralForce unchanged - affects sand only) */
+            if (!particles || !particleGeometry || velocities.length !== particleCount || particleCount === 0) return; const center = tempVec3.set(0, parseFloat(baseWaterLevelInput.value) + 10, 0); const forceScale = 0.06; const upwardForce = 0.02; const pos = particleGeometry.attributes.position.array; for (let i = 0; i < particleCount; i++) { const v = velocities[i]; tempVec3b.set(center.x - pos[i*3], center.y - pos[i*3 + 1], center.z - pos[i*3 + 2]).normalize(); v.addScaledVector(tempVec3b, -forceScale); v.y += upwardForce; }
+        }
+
+        // REMOVED: applyLocalForce - Terrain modification is now the primary click interaction
+
+        // --- Terrain Modification Function ---
+        function modifyTerrain(intersectionPoint, lowerTerrain = false) {
+             // (modifyTerrain unchanged)
+             if (!terrainGeometry || !terrainGeometry.attributes.position) return; const positions = terrainGeometry.attributes.position.array; const vertex = new THREE.Vector3(); const modRadiusSq = modificationRadius * modificationRadius; const strength = modificationStrength * (lowerTerrain ? -1 : 1); let vertexModified = false; for (let i = 0; i < positions.length / 3; i++) { vertex.fromBufferAttribute(terrainGeometry.attributes.position, i); const dx = intersectionPoint.x - vertex.x; const dz = intersectionPoint.z - vertex.z; const distSqXZ = dx * dx + dz * dz; if (distSqXZ < modRadiusSq) { const dist3D = intersectionPoint.distanceTo(vertex); if (dist3D < modificationRadius) { const falloff = Math.cos((dist3D / modificationRadius) * Math.PI / 2); positions[i * 3 + 1] += strength * falloff; vertexModified = true; } } } if (vertexModified) { terrainGeometry.attributes.position.needsUpdate = true; terrainGeometry.computeVertexNormals(); updateReflectionMap(true); }
+         }
+
+        // Reflection Map Update Function
+        function updateReflectionMap(forceUpdate = false) {
+             if (!renderer || !scene || !cubeCamera || !cubeRenderTarget) return;
+             const shouldUpdate = forceUpdate || (frameCounter % REFLECTION_UPDATE_INTERVAL === 0);
+             if (shouldUpdate) {
+                // *** Ensure NEW waterMesh is hidden ***
+                 const waterWasVisible = waterMesh ? waterMesh.visible : false;
+                 const sandParticlesWereVisible = particles ? particles.visible : false;
+                 const vegetationParticlesWereVisible = vegetationParticles ? vegetationParticles.visible : false;
+                 const sparklesWereVisible = sparkleParticles ? sparkleParticles.visible : false;
+                 const terrainWasVisible = terrainMesh ? terrainMesh.visible : true;
+                 const skyWasVisible = sky ? sky.visible : true;
+
+                 if (waterMesh) waterMesh.visible = false; // Hide GPGPU water
+                 if (particles) particles.visible = false;
+                 if (vegetationParticles) vegetationParticles.visible = false;
+                 if (sparkleParticles) sparkleParticles.visible = false;
+                 if (terrainMesh) terrainMesh.visible = true; if (sky) sky.visible = true;
+
+                 const baseWaterLevel = parseFloat(baseWaterLevelInput.value) || 0;
+                 cubeCamera.position.copy(camera.position);
+                 cubeCamera.position.y = Math.max(baseWaterLevel + 0.5, 2 * baseWaterLevel - camera.position.y);
+                 cubeCamera.update(renderer, scene);
+
+                 if (waterMesh) waterMesh.visible = waterWasVisible; // Restore GPGPU water visibility
+                 if (particles) particles.visible = sandParticlesWereVisible;
+                 if (vegetationParticles) vegetationParticles.visible = vegetationParticlesWereVisible;
+                 if (sparkleParticles) sparkleParticles.visible = sparklesWereVisible;
+                 if (terrainMesh) terrainMesh.visible = terrainWasVisible;
+                 if (sky) sky.visible = skyWasVisible;
+
+                 if (waterMaterial instanceof WaterMaterial) waterMaterial.envMap = cubeRenderTarget.texture; // Apply to new water material
+             }
+         }
+
+        // --- Main Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            frameCounter++; // For reflection map interval
+            gpgpuFrameCounter++; // For GPGPU interval
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // Update controls (respecting interaction flags)
+             if (!isPointerDown) { // Only update controls automatically if pointer is up
+                 if (!controls.enabled) controls.enabled = true; // Re-enable if needed
+                 controls.update();
+             } else {
+                 // If pointer is down, controls might have been disabled by handleInteraction.
+                 // OrbitControls internal state usually handles this correctly.
+             }
+
+            // Update directional light position (Unchanged)
+            if (dirLight) { const lightRadius = TERRAIN_HALF_SIZE * 1.5; dirLight.position.x = Math.cos(time * 0.08) * lightRadius; dirLight.position.z = Math.sin(time * 0.08) * lightRadius; dirLight.target.updateMatrixWorld(); }
+
+            updateReflectionMap(); // Update reflection map periodically
+
+
+            // --- GPGPU Water Simulation --- // *** NEW ***
+            if ( gpuCompute && heightmapVariable && waterMesh?.material instanceof WaterMaterial ) {
+                const simSpeed = parseInt(waterSpeedInput.value) || 4;
+                const updateFrequency = Math.max(1, 7 - simSpeed); // Frame skip based on speed
+
+                if ( gpgpuFrameCounter >= updateFrequency ) {
+                    try {
+                        // Set uniforms that might change frame-to-frame (like mouse position)
+                        // mousePos is updated in handleInteraction
+                        // Other uniforms (size, deep, viscosity) are updated by event listeners
+
+                        // Compute the simulation step
+                        gpuCompute.compute();
+
+                        // Get the result texture
+                        const heightmapTexture = gpuCompute.getCurrentRenderTarget( heightmapVariable ).texture;
+
+                        // Update the water material's heightmap uniform
+                        waterMaterial.heightmap = heightmapTexture; // Use the setter
+
+                        gpgpuFrameCounter = 0; // Reset counter
+
+                    } catch(gpgpuError) {
+                        console.error("Error during gpuCompute.compute():", gpgpuError);
+                        // Consider disabling GPGPU if errors persist
+                        // gpuCompute = null;
+                    }
+                }
+            }
+
+            // --- Animate Vegetation Particles (GPU) --- (Unchanged)
+            if (vegetationParticles && vegetationParticleMaterial) { vegetationUniforms.uTime.value = time; }
+
+
+             // --- Animate Sparkles (CPU) --- // *** MODIFIED: Simplified Y movement ***
+             if (sparkleParticles && sparkleGeometry?.attributes.position && sparkleInitialPositions.length > 0) {
+                 const sparklePos = sparkleGeometry.attributes.position.array;
+                 // REMOVED: Water height lookup - too complex/slow with GPGPU texture on CPU
+                 let needsSparkleUpdate = false;
+
+                 for (let i = 0; i < sparkleInitialPositions.length; i++) {
+                      const idx = i * 3;
+                      const initialPos = sparkleInitialPositions[i]; // Contains original X, base Y, original Z
+                      const animOffset = sparkleAnimOffsets[i];
+
+                      // Use the BASE water level stored in initialPos.y
+                      const baseLevel = initialPos.y;
+
+                      // Calculate oscillation and final Y position relative to base level
+                      const oscillation = Math.sin(time * SPARKLE_OSCILLATION_SPEED + animOffset) * SPARKLE_OSCILLATION_STRENGTH;
+                      const finalY = baseLevel + oscillation; // Oscillate around the stored base level
+
+                      if (Math.abs(finalY - sparklePos[idx + 1]) > 0.0001) {
+                          sparklePos[idx + 1] = finalY;
+                          needsSparkleUpdate = true;
+                      }
+                 }
+                 if (needsSparkleUpdate) { sparkleGeometry.attributes.position.needsUpdate = true; }
+             }
+
+
+            // --- Particle Simulation (Sand - CPU) --- (Largely unchanged, uses interpolated terrain/base water)
+            if (particles?.geometry.attributes.position && velocities.length === particleCount && particleCount > 0) {
+                 const waterPos = waterGeometry?.attributes.position.array; // Still needed for sand collision approx. (using base level mainly)
+                 const terrainPos = terrainGeometry?.attributes.position.array;
+                 const pos = particleGeometry.attributes.position.array; const colors = particleGeometry.attributes.color.array;
+                 const gravity = parseFloat(gravityInput.value); lowColorCache.set(lowColorInput.value); highColorCache.set(highColorInput.value); const minHeight = parseFloat(colorMinHeightInput.value); const maxHeight = parseFloat(colorMaxHeightInput.value); const heightRange = Math.max(0.01, maxHeight - minHeight); const terrainVertsAcross = TERRAIN_SEGMENTS + 1; const terrainGridSpacing = TERRAIN_SIZE / TERRAIN_SEGMENTS;
+                 // const waterVertsAcross = waterSegments + 1; // Not needed anymore
+                 // const waterGridSpacing = TERRAIN_SIZE / waterSegments; // Not needed anymore
+                 const baseWaterLevel = parseFloat(baseWaterLevelInput.value); // Use base water level for sand collision
+
+                 let needsPosUpdate = false; let needsColorUpdate = false; const velocityDamping = 0.996; const boundaryDamping = 0.4; const waterDrag = 0.8; const terrainBounce = -0.2;
+                 for (let i = 0; i < particleCount; i++) { const idx = i * 3; const v = velocities[i]; v.y -= gravity; pos[idx] += v.x; pos[idx + 1] += v.y; pos[idx + 2] += v.z; const currentX = pos[idx]; let currentY = pos[idx + 1]; const currentZ = pos[idx + 2]; let collided = false;
+                      // Terrain Collision (unchanged)
+                      if (terrainPos && terrainGeometry) { const gridX = (currentX + TERRAIN_HALF_SIZE) / terrainGridSpacing; const gridZ = (currentZ + TERRAIN_HALF_SIZE) / terrainGridSpacing; const col0 = Math.floor(gridX); const row0 = Math.floor(gridZ); if (col0 >= 0 && col0 < TERRAIN_SEGMENTS && row0 >= 0 && row0 < TERRAIN_SEGMENTS) { const col1 = col0 + 1; const row1 = row0 + 1; const i00 = row0 * terrainVertsAcross + col0; const i10 = row0 * terrainVertsAcross + col1; const i01 = row1 * terrainVertsAcross + col0; const i11 = row1 * terrainVertsAcross + col1; if (i11 * 3 + 1 < terrainPos.length) { const h00 = terrainPos[i00 * 3 + 1]; const h10 = terrainPos[i10 * 3 + 1]; const h01 = terrainPos[i01 * 3 + 1]; const h11 = terrainPos[i11 * 3 + 1]; const tx = gridX - col0; const tz = gridZ - row0; const h0 = THREE.MathUtils.lerp(h00, h10, tx); const h1 = THREE.MathUtils.lerp(h01, h11, tx); const estimatedTerrainHeight = THREE.MathUtils.lerp(h0, h1, tz); if (currentY < estimatedTerrainHeight) { currentY = estimatedTerrainHeight + 0.01; pos[idx + 1] = currentY; v.y *= terrainBounce; v.x *= 0.6; v.z *= 0.6; collided = true; } } } }
+                      // Water Collision (MODIFIED: Use baseWaterLevel)
+                      if (!collided && currentY < baseWaterLevel) {
+                          currentY = baseWaterLevel + Math.random() * 0.01; pos[idx + 1] = currentY;
+                          v.y = Math.abs(v.y) * 0.15; v.x *= waterDrag; v.z *= waterDrag; collided = true;
+                      }
+                      if (!collided) { v.multiplyScalar(velocityDamping); }
+                      // Boundary Collision (unchanged)
+                      if (currentX < -TERRAIN_HALF_SIZE || currentX > TERRAIN_HALF_SIZE) { pos[idx] = THREE.MathUtils.clamp(currentX, -TERRAIN_HALF_SIZE, TERRAIN_HALF_SIZE); v.x *= -boundaryDamping; } if (currentZ < -TERRAIN_HALF_SIZE || currentZ > TERRAIN_HALF_SIZE) { pos[idx + 2] = THREE.MathUtils.clamp(currentZ, -TERRAIN_HALF_SIZE, TERRAIN_HALF_SIZE); v.z *= -boundaryDamping; }
+                      const finalY = pos[idx + 1]; const normalizedHeight = THREE.MathUtils.clamp((finalY - minHeight) / heightRange, 0, 1); tempColor.lerpColors(lowColorCache, highColorCache, normalizedHeight); colors[idx] = tempColor.r; colors[idx + 1] = tempColor.g; colors[idx + 2] = tempColor.b; if (v.lengthSq() > 0.00001) { needsPosUpdate = true; } needsColorUpdate = true;
+                 }
+                 if (needsPosUpdate) particleGeometry.attributes.position.needsUpdate = true; if (needsColorUpdate) particleGeometry.attributes.color.needsUpdate = true;
+             }
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+
+        // --- Window Resize Handler ---
+        function onWindowResize() { /* (onWindowResize unchanged) */
+             if (!camera || !renderer) return; camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); updateReflectionMap(true);
+         }
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+             window.addEventListener('resize', onWindowResize);
+             renderer.domElement.addEventListener('pointerdown', onPointerDown);
+             renderer.domElement.addEventListener('pointermove', onPointerMove);
+             renderer.domElement.addEventListener('pointerup', onPointerUp);
+             renderer.domElement.addEventListener('pointerleave', onPointerUp); // Treat leaving canvas as pointer up
+             window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp);
+
+             // General Controls (unchanged)
+             particleCountInput.addEventListener('change', resetSimulation); particleSizeInput.addEventListener('input', updateParticleSize); gravityInput.addEventListener('input', () => {}); lowColorInput.addEventListener('input', () => {}); highColorInput.addEventListener('input', () => {}); colorMinHeightInput.addEventListener('input', () => {}); colorMaxHeightInput.addEventListener('input', () => {});
+             // Terrain Controls (unchanged)
+             modificationRadiusInput.addEventListener('input', (e) => modificationRadius = parseFloat(e.target.value)); modificationStrengthInput.addEventListener('input', (e) => modificationStrength = parseFloat(e.target.value)); terrainSizeInput.addEventListener('change', resetSimulation); terrainSegmentsInput.addEventListener('change', resetSimulation); terrainHeightScaleInput.addEventListener('change', resetSimulation); terrainFrequencyInput.addEventListener('change', resetSimulation); terrainColorInput.addEventListener('input', updateTerrainColor);
+             // Tree Controls (unchanged)
+             particleTreeCountInput.addEventListener('change', resetSimulation); particlesPerTreeInput.addEventListener('change', resetSimulation); treeHeightInput.addEventListener('change', resetSimulation); leafClusterSizeInput.addEventListener('change', resetSimulation); leafColorInput.addEventListener('input', updateVegetationParticleColors); trunkColorInput.addEventListener('input', updateVegetationParticleColors); treeSwayStrengthInput.addEventListener('input', (e) => vegetationUniforms.uLeafSwayStrength.value = parseFloat(e.target.value)); treeSwaySpeedInput.addEventListener('input', (e) => vegetationUniforms.uLeafSwaySpeed.value = parseFloat(e.target.value));
+             // Grass/Flower Controls (unchanged)
+             vegetationParticleSizeInput.addEventListener('input', updateVegetationParticleSize); grassDensityInput.addEventListener('change', resetSimulation); flowerDensityInput.addEventListener('change', resetSimulation); grassHeightInput.addEventListener('change', (e) => { vegetationUniforms.uBaseGrassHeight.value = parseFloat(e.target.value); resetSimulation(); }); flowerHeightInput.addEventListener('change', resetSimulation); grassColorInput.addEventListener('input', updateVegetationParticleColors); flowerColor1Input.addEventListener('input', updateVegetationParticleColors); flowerColor2Input.addEventListener('input', updateVegetationParticleColors); grassSwayStrengthInput.addEventListener('input', (e) => vegetationUniforms.uGrassSwayStrength.value = parseFloat(e.target.value)); grassSwaySpeedInput.addEventListener('input', (e) => vegetationUniforms.uGrassSwaySpeed.value = parseFloat(e.target.value));
+
+             // --- Water Controls --- // *** MODIFIED/ADDED ***
+             // REMOVED: waterSegmentsInput listener
+             baseWaterLevelInput.addEventListener('change', resetSimulation); // Water level change needs full reset
+             waterColorInput.addEventListener('input', updateWaterColor); // Update base color
+             // REMOVED: waveSpreadInput, waveDampingInput listeners
+             // ADDED: GPGPU Water Control Listeners
+             waterMouseSizeInput.addEventListener('input', updateWaterUniforms);
+             waterDeepInput.addEventListener('input', updateWaterUniforms);
+             waterViscosityInput.addEventListener('input', updateWaterUniforms);
+             waterSpeedInput.addEventListener('input', updateWaterUniforms); // Speed only affects frame skip, uniforms updated too
+
+             // Sparkle Controls (unchanged)
+             sparkleCountInput.addEventListener('change', resetSimulation); sparkleSizeInput.addEventListener('input', updateSparkleMaterial); sparkleColorInput.addEventListener('input', updateSparkleMaterial);
+             // Visual Controls (unchanged)
+             skyColorInput.addEventListener('input', updateSkyColor); fogNearInput.addEventListener('input', updateFog); fogFarInput.addEventListener('input', updateFog);
+             // Buttons (unchanged)
+             document.getElementById('resetSimulationButton').addEventListener('click', resetSimulation); document.getElementById('applyCentralForceButton').addEventListener('click', applyCentralForce); document.getElementById('resetCameraButton').addEventListener('click', resetCamera);
+         }
+
+        // --- Start the simulation ---
+        init();
+
+    </script>
+</body>
+</html>

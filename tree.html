@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Model - Voxelizer (Lit Voxels)</title> <style>
+        body { margin: 0; overflow: hidden; background-color: #cccccc; font-family: sans-serif; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.85); /* Slightly less transparent */
+            padding: 15px;
+            border-radius: 8px;
+            width: 230px; /* Slightly wider */
+            max-height: 95vh; /* Limit height */
+            overflow-y: auto; /* Add scroll if needed */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 14px; /* Slightly smaller base font */
+        }
+        #controls h4, #controls h5 {
+            margin-top: 15px; margin-bottom: 10px; padding-bottom: 5px;
+            border-bottom: 1px solid #ccc; font-weight: 600;
+            font-size: 1.1em;
+        }
+        #controls h4:first-child, #controls h5:first-child { margin-top: 0; }
+        #controls label, #controls button { display: block; margin-bottom: 10px; cursor: pointer; line-height: 1.3; }
+        #controls input[type="checkbox"] { margin-right: 8px; vertical-align: middle; }
+        #controls input[type="file"] { margin-top: 5px; display: block; width: 95%; font-size: 0.9em; }
+        #controls input[type="range"] { width: calc(100% - 55px); vertical-align: middle; cursor: pointer;} /* Adjusted width */
+        #controls output { display: inline-block; width: 45px; text-align: right; font-size: 0.9em; font-family: monospace;} /* Monospace for numbers */
+        #controls .button-group button {
+             display: inline-block; padding: 4px 8px; margin-right: 5px; margin-bottom: 5px; /* Allow wrap */
+             border: 1px solid #aaa; background-color: #eee; border-radius: 4px;
+             font-size: 0.9em; cursor: pointer;
+        }
+         #controls .button-group button:hover { background-color: #ddd; }
+        #controls button#voxelizeButton { /* Style voxelize button */
+            width: 100%; padding: 6px; font-weight: bold; margin-top: 5px;
+            background-color: #4CAF50; color: white; border: none; border-radius: 4px;
+        }
+        #controls button#voxelizeButton:disabled,
+        #controls button#exportVoxelsJsonButton:disabled,
+        #controls button#exportVoxelsJsButton:disabled {
+             background-color: #aaa; cursor: not-allowed;
+        }
+        #controls button.export-button { /* Style export buttons */
+            width: 100%; padding: 5px; margin-top: 5px; font-size: 0.9em;
+            background-color: #007bff; color: white; border: none; border-radius: 4px;
+        }
+        #controls button.export-button:hover:not(:disabled) { background-color: #0056b3; }
+        #status, #voxelStatus { margin-top: 10px; font-size: 0.9em; color: #333; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h4>Load Model</h4>
+        <label for="modelInput">Select .glb file:</label>
+        <input type="file" id="modelInput" accept=".glb">
+        <p id="status">No model loaded.</p>
+
+        <h5 style="margin-top: 20px;">Voxelization</h5>
+        <label for="voxelSize">Voxel Size: <output id="voxelSizeValue">0.100</output></label>
+        <input type="range" id="voxelSize" min="0.01" max="0.5" step="0.005" value="0.1">
+
+        <button id="voxelizeButton" disabled>Voxelize Model</button>
+        <label><input type="checkbox" id="showOriginal" checked> Show Original Model</label>
+        <p id="voxelStatus"></p>
+
+        <button id="exportVoxelsJsonButton" class="export-button" disabled>Export Voxels (JSON)</button>
+        <button id="exportVoxelsJsButton" class="export-button" disabled>Export Voxels (JS Code)</button>
+
+
+        <h5 style="margin-top: 20px;">Material Effects (Original Model)</h5>
+         <label><input type="checkbox" id="wireframe"> Wireframe</label>
+        <label><input type="checkbox" id="glow"> Glow (Emissive)</label>
+        <label for="transparency">Transparency: <output id="transparencyValue">1.00</output></label>
+        <input type="range" id="transparency" min="0.1" max="1.0" step="0.01" value="1.0">
+        <label>Color Tint:</label>
+        <div class="button-group">
+            <button id="tintNormal">Normal</button>
+            <button id="tintAutumn">Autumn</button>
+            <button id="tintFrost">Frost</button>
+        </div>
+
+        <h5>Animation (Visible Model)</h5>
+        <label><input type="checkbox" id="rotate"> Auto-Rotate Y</label>
+        <label><input type="checkbox" id="sway"> Simple Sway Z (Original Only)</label>
+
+        <h5>Lighting</h5>
+        <label for="lightIntensity">Light Intensity: <output id="lightIntensityValue">2.0</output></label>
+        <input type="range" id="lightIntensity" min="0.0" max="5.0" step="0.1" value="2.0">
+
+        <h5>Environment</h5>
+        <label><input type="checkbox" id="fog"> Enable Fog</label>
+
+        <h5>Post-Processing</h5>
+        <label><input type="checkbox" id="bloom"> Bloom Effect</label>
+         <label for="bloomThreshold" style="margin-left: 15px; display: block;"> Threshold: <output id="bloomThresholdValue">0.85</output></label>
+        <input type="range" id="bloomThreshold" min="0.0" max="1.0" step="0.01" value="0.85" style="width: calc(100% - 100px); margin-left: 15px;">
+         <label for="bloomStrength" style="margin-left: 15px; display: block;"> Strength: <output id="bloomStrengthValue">0.5</output></label>
+        <input type="range" id="bloomStrength" min="0.0" max="3.0" step="0.05" value="0.5" style="width: calc(100% - 100px); margin-left: 15px;">
+        <label for="bloomRadius" style="margin-left: 15px; display: block;"> Radius: <output id="bloomRadiusValue">0.20</output></label>
+        <input type="range" id="bloomRadius" min="0.0" max="1.0" step="0.01" value="0.2" style="width: calc(100% - 100px); margin-left: 15px;">
+
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+        // --- Global Variables ---
+        let scene, camera, renderer, controls;
+        let composer, renderPass, bloomPass, outputPass;
+        let currentModel = null;
+        let originalMaterials = new Map();
+        let directionalLight;
+        let voxelMesh = null;
+        let canvasCache = new Map();
+        let currentVoxelSize = 0.1;
+
+
+        // --- DOM Elements ---
+        const modelInput = document.getElementById('modelInput');
+        const statusElement = document.getElementById('status');
+        const wireframeCheckbox = document.getElementById('wireframe');
+        const glowCheckbox = document.getElementById('glow');
+        const rotateCheckbox = document.getElementById('rotate');
+        const swayCheckbox = document.getElementById('sway');
+        const fogCheckbox = document.getElementById('fog');
+        const transparencySlider = document.getElementById('transparency');
+        const transparencyValue = document.getElementById('transparencyValue');
+        const tintNormalButton = document.getElementById('tintNormal');
+        const tintAutumnButton = document.getElementById('tintAutumn');
+        const tintFrostButton = document.getElementById('tintFrost');
+        const lightIntensitySlider = document.getElementById('lightIntensity');
+        const lightIntensityValue = document.getElementById('lightIntensityValue');
+        const bloomCheckbox = document.getElementById('bloom');
+        const bloomThresholdSlider = document.getElementById('bloomThreshold');
+        const bloomThresholdValue = document.getElementById('bloomThresholdValue');
+        const bloomStrengthSlider = document.getElementById('bloomStrength');
+        const bloomStrengthValue = document.getElementById('bloomStrengthValue');
+        const bloomRadiusSlider = document.getElementById('bloomRadius');
+        const bloomRadiusValue = document.getElementById('bloomRadiusValue');
+        const voxelSizeSlider = document.getElementById('voxelSize');
+        const voxelSizeValue = document.getElementById('voxelSizeValue');
+        const voxelizeButton = document.getElementById('voxelizeButton');
+        const voxelStatus = document.getElementById('voxelStatus');
+        const showOriginalCheckbox = document.getElementById('showOriginal');
+        const exportVoxelsJsonButton = document.getElementById('exportVoxelsJsonButton');
+        const exportVoxelsJsButton = document.getElementById('exportVoxelsJsButton');
+
+
+        // --- Initialization ---
+        function init() {
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0xcccccc);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(5, 5, 10); camera.lookAt(0, 1, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1, 0); controls.enableDamping = true; controls.update();
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Ambient light affects all lit materials
+            scene.add(ambientLight);
+            directionalLight = new THREE.DirectionalLight(0xffffff, parseFloat(lightIntensitySlider.value)); // Directional light affects lit materials
+            directionalLight.position.set(3, 10, 5);
+            scene.add(directionalLight);
+
+            composer = new EffectComposer(renderer); renderPass = new RenderPass(scene, camera); composer.addPass(renderPass);
+            bloomPass = new UnrealBloomPass( new THREE.Vector2(window.innerWidth, window.innerHeight),
+                    parseFloat(bloomStrengthSlider.value), parseFloat(bloomRadiusSlider.value), parseFloat(bloomThresholdSlider.value) );
+            outputPass = new OutputPass(); composer.addPass(outputPass);
+
+            // Event Listeners
+            modelInput.addEventListener('change', handleFileSelect, false);
+            wireframeCheckbox.addEventListener('change', handleWireframe); glowCheckbox.addEventListener('change', handleGlow);
+            fogCheckbox.addEventListener('change', handleFog); transparencySlider.addEventListener('input', handleTransparency);
+            lightIntensitySlider.addEventListener('input', handleLightIntensity); bloomCheckbox.addEventListener('change', handleBloom);
+            bloomThresholdSlider.addEventListener('input', handleBloomParams); bloomStrengthSlider.addEventListener('input', handleBloomParams);
+            bloomRadiusSlider.addEventListener('input', handleBloomParams);
+            tintNormalButton.addEventListener('click', () => applyColorTint(null)); tintAutumnButton.addEventListener('click', () => applyColorTint('autumn'));
+            tintFrostButton.addEventListener('click', () => applyColorTint('frost'));
+            voxelSizeSlider.addEventListener('input', () => { voxelSizeValue.textContent = parseFloat(voxelSizeSlider.value).toFixed(3); });
+            voxelizeButton.addEventListener('click', handleVoxelize); showOriginalCheckbox.addEventListener('change', handleVisibilityToggle);
+            exportVoxelsJsonButton.addEventListener('click', () => handleExportVoxels('json'));
+            exportVoxelsJsButton.addEventListener('click', () => handleExportVoxels('js'));
+
+            updateAllUIOutputs();
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+            statusElement.textContent = 'Ready. Select a .glb file.';
+        }
+
+        function updateAllUIOutputs() {
+            transparencyValue.textContent = parseFloat(transparencySlider.value).toFixed(2);
+            lightIntensityValue.textContent = parseFloat(lightIntensitySlider.value).toFixed(1);
+            voxelSizeValue.textContent = parseFloat(voxelSizeSlider.value).toFixed(3);
+            bloomThresholdValue.textContent = parseFloat(bloomThresholdSlider.value).toFixed(2);
+            bloomStrengthValue.textContent = parseFloat(bloomStrengthSlider.value).toFixed(1);
+            bloomRadiusValue.textContent = parseFloat(bloomRadiusSlider.value).toFixed(2);
+         }
+
+        // --- File Handling ---
+        function handleFileSelect(event) {
+             const file = event.target.files[0]; if (!file) return;
+             if (!file.name.toLowerCase().endsWith('.glb')) { alert('Please select a .glb file.'); return; }
+             statusElement.textContent = 'Reading...'; voxelStatus.textContent = ''; voxelizeButton.disabled = true;
+             exportVoxelsJsonButton.disabled = true;
+             exportVoxelsJsButton.disabled = true;
+             const reader = new FileReader();
+             reader.onload = (e) => { statusElement.textContent = 'Parsing...'; loadGLBModel(e.target.result, file.name); };
+             reader.onerror = (e) => { statusElement.textContent = 'Error reading file.'; console.error(e); };
+             reader.readAsArrayBuffer(file);
+        }
+
+        function loadGLBModel(arrayBuffer, fileName) {
+            const loader = new GLTFLoader();
+            if (currentModel) { scene.remove(currentModel); currentModel = null; }
+            if (voxelMesh) { scene.remove(voxelMesh); voxelMesh.geometry.dispose(); voxelMesh.material.dispose(); voxelMesh = null; }
+            originalMaterials.clear(); canvasCache.clear();
+            exportVoxelsJsonButton.disabled = true;
+            exportVoxelsJsButton.disabled = true;
+
+            loader.parse( arrayBuffer, '',
+                function ( gltf ) { // Success
+                    currentModel = gltf.scene;
+                    originalMaterials.clear();
+                    currentModel.traverse(child => { if (child.isMesh && child.material) {
+                        const mat = Array.isArray(child.material) ? child.material[0] : child.material;
+                        // Make sure original materials can handle transparency if needed later
+                        if (mat) {
+                             if (mat.clone) originalMaterials.set(child.uuid, mat.clone());
+                             mat.needsUpdate = true;
+                        }
+                    }});
+
+                    const box = new THREE.Box3().setFromObject(currentModel); const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3()); const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = (maxDim > 0.001) ? (5.0 / maxDim) : 1.0;
+                    currentModel.scale.multiplyScalar(scale); currentModel.position.sub(center.multiplyScalar(scale));
+                    scene.add(currentModel); controls.target.copy(currentModel.position); controls.update();
+
+                    applyCurrentEffects(); // Apply effects to the newly loaded original model
+
+                    statusElement.textContent = `Loaded: ${fileName}.`; voxelStatus.textContent = `Ready to voxelize.`;
+                    modelInput.value = ''; voxelizeButton.disabled = false;
+                    showOriginalCheckbox.checked = true;
+                    handleVisibilityToggle();
+
+                }, function ( error ) { statusElement.textContent = 'Error parsing GLB.'; console.error(error); voxelizeButton.disabled = true; }
+            );
+        }
+
+        // --- Voxelization Logic ---
+        function handleVoxelize() {
+            if (!currentModel) { alert("Please load a model first."); return; }
+            voxelizeButton.disabled = true;
+            voxelStatus.textContent = "Voxelizing (can take time)...";
+            exportVoxelsJsonButton.disabled = true;
+            exportVoxelsJsButton.disabled = true;
+
+            if (voxelMesh) {
+                 scene.remove(voxelMesh);
+                 voxelMesh.geometry.dispose();
+                 voxelMesh.material.dispose();
+                 voxelMesh = null;
+            }
+
+            setTimeout(() => {
+                currentVoxelSize = parseFloat(voxelSizeSlider.value);
+                console.time("Voxelization");
+                const voxels = createVoxelsFromModelWithTexture(currentModel, currentVoxelSize);
+                console.timeEnd("Voxelization");
+
+                if (voxels && voxels.positions.length > 0) {
+                    console.time("CreateInstancedMesh");
+                    voxelMesh = createInstancedVoxelMesh(voxels.positions, voxels.colors, currentVoxelSize); // Now uses Standard Material
+                     console.timeEnd("CreateInstancedMesh");
+                    if (voxelMesh) {
+                        scene.add(voxelMesh);
+                        voxelStatus.textContent = `Voxelized: ${voxels.positions.length} voxels.`;
+                        showOriginalCheckbox.checked = false;
+                        handleVisibilityToggle();
+                        exportVoxelsJsonButton.disabled = false;
+                        exportVoxelsJsButton.disabled = false;
+                    } else {
+                         voxelStatus.textContent = "Failed to create voxel mesh.";
+                    }
+                } else {
+                    voxelStatus.textContent = "Voxelization failed or produced no voxels.";
+                }
+                voxelizeButton.disabled = false;
+            }, 50);
+        }
+
+        // Not used currently but kept
+        function getTextureContext(texture) { /* ... no changes ... */ }
+
+        // ** Voxel creation function with Estimated Colors (Height-Based) **
+        function createVoxelsFromModelWithTexture(model, voxelSize) { /* ... no changes needed in logic here ... */
+            const voxelAccumulators = new Map();
+            const boundingBox = new THREE.Box3().setFromObject(model);
+            if (boundingBox.isEmpty()) { console.warn("Model bounding box is empty."); return null; }
+
+            const modelHeight = boundingBox.max.y - boundingBox.min.y;
+            if (modelHeight <= 0) { console.warn("Model has no height."); return null; }
+
+            const trunkBrown = new THREE.Color(0x8B4513);
+            const leafGreen = new THREE.Color(0x2E8B57);
+            const trunkRatio = 0.35;
+            const canopyThresholdY = boundingBox.min.y + modelHeight * trunkRatio;
+
+            const invVoxelSize = 1.0 / voxelSize;
+            const tempVertex = new THREE.Vector3();
+            let verticesProcessed = 0;
+
+            model.traverse(child => {
+                if (child.isMesh && child.visible) {
+                    const geometry = child.geometry;
+                    const positionAttribute = geometry.attributes.position;
+                    if (positionAttribute) {
+                        verticesProcessed += positionAttribute.count;
+                        for (let i = 0; i < positionAttribute.count; i++) {
+                            tempVertex.fromBufferAttribute(positionAttribute, i);
+                            child.localToWorld(tempVertex);
+                            const ix = Math.floor((tempVertex.x - boundingBox.min.x) * invVoxelSize);
+                            const iy = Math.floor((tempVertex.y - boundingBox.min.y) * invVoxelSize);
+                            const iz = Math.floor((tempVertex.z - boundingBox.min.z) * invVoxelSize);
+                            const key = `${ix}_${iy}_${iz}`;
+                            const voxelCenterY = boundingBox.min.y + iy * voxelSize + (voxelSize * 0.5);
+                            let estimatedColor;
+                            if (voxelCenterY < canopyThresholdY) {
+                                estimatedColor = trunkBrown.clone();
+                                estimatedColor.offsetHSL((Math.random()-0.5)*0.05, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.3);
+                            } else {
+                                estimatedColor = leafGreen.clone();
+                                estimatedColor.offsetHSL((Math.random()-0.5)*0.1, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.4);
+                            }
+                            if (voxelAccumulators.has(key)) {
+                                const accumulator = voxelAccumulators.get(key);
+                                accumulator.colorSum.add(estimatedColor); accumulator.count++;
+                            } else {
+                                voxelAccumulators.set(key, { colorSum: estimatedColor.clone(), count: 1 });
+                            }
+                        }
+                    }
+                }
+            });
+
+            const positions = []; const colors = []; const halfSize = voxelSize / 2.0;
+            const defaultAvgColor = new THREE.Color(0x808080);
+
+            for (const [key, accumulator] of voxelAccumulators.entries()) {
+                const coords = key.split('_').map(Number);
+                const x = boundingBox.min.x + coords[0] * voxelSize + halfSize;
+                const y = boundingBox.min.y + coords[1] * voxelSize + halfSize;
+                const z = boundingBox.min.z + coords[2] * voxelSize + halfSize;
+                positions.push(new THREE.Vector3(x, y, z));
+                let averageColor = defaultAvgColor.clone();
+                if (accumulator.count > 0) {
+                    averageColor.copy(accumulator.colorSum).multiplyScalar(1.0 / accumulator.count);
+                }
+                averageColor.r = Math.max(0, Math.min(1, averageColor.r));
+                averageColor.g = Math.max(0, Math.min(1, averageColor.g));
+                averageColor.b = Math.max(0, Math.min(1, averageColor.b));
+                colors.push(averageColor);
+            }
+            console.log("Voxel color estimation complete.");
+            return { positions, colors };
+        }
+
+
+        // ** InstancedMesh creation - NOW USES MeshStandardMaterial **
+        function createInstancedVoxelMesh(positions, colors, voxelSize) {
+             const voxelGeometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+             // !!! --- USING MESH STANDARD MATERIAL (Reacts to Light) --- !!!
+             const voxelMaterial = new THREE.MeshStandardMaterial({
+                 vertexColors: true,
+                 // You can optionally adjust other properties like roughness or metalness here
+                 // roughness: 0.8,
+                 // metalness: 0.1
+                });
+             // !!! --- END CHANGE --- !!!
+             const count = positions.length; if(count === 0) return null;
+
+             const instancedMesh = new THREE.InstancedMesh(voxelGeometry, voxelMaterial, count);
+             const dummy = new THREE.Object3D();
+             const tempColor = new THREE.Color();
+             const defaultColor = new THREE.Color(0x808080); // Fallback grey if color isn't valid
+
+             console.log(`Creating InstancedMesh with ${count} instances using MeshStandardMaterial.`); // Updated log
+
+             for (let i = 0; i < count; i++) {
+                 // Position
+                 dummy.position.copy(positions[i]);
+                 dummy.updateMatrix();
+                 instancedMesh.setMatrixAt(i, dummy.matrix);
+
+                 // Color
+                 const colorToSet = (colors[i] instanceof THREE.Color) ? colors[i] : defaultColor;
+                 tempColor.copy(colorToSet);
+                 instancedMesh.setColorAt(i, tempColor); // Set color for instance i
+             }
+
+             // Set needsUpdate AFTER the loop
+             instancedMesh.instanceMatrix.needsUpdate = true;
+             if (instancedMesh.instanceColor) { // Check if instanceColor exists (it should with vertexColors: true)
+                instancedMesh.instanceColor.needsUpdate = true;
+                // console.log("InstancedMesh instanceColor.needsUpdate set to true (AFTER loop).");
+             } else {
+                console.warn("InstancedMesh does not have instanceColor buffer. Colors might not work as expected.");
+             }
+
+             return instancedMesh;
+        }
+
+
+        // --- Visibility Toggle ---
+        function handleVisibilityToggle() {
+            const showOriginal = showOriginalCheckbox.checked;
+            if (currentModel) {
+                currentModel.visible = showOriginal;
+                // Re-apply effects only if original model is made visible,
+                // because voxel mesh doesn't have separate effects in this version
+                if (showOriginal) applyCurrentEffects();
+            }
+            if (voxelMesh) {
+                voxelMesh.visible = !showOriginal;
+                // No specific voxel effects to apply here in this version
+            }
+        }
+
+        // --- START: Voxel Export Logic ---
+        function handleExportVoxels(format = 'json') { /* ... no changes needed ... */
+            if (!voxelMesh || !voxelMesh.instanceMatrix) { alert("No voxel data available to export. Please voxelize a model first."); return; }
+            const count = voxelMesh.count; if (count === 0) { alert("Voxel model is empty, nothing to export."); return; }
+            console.log(`Exporting ${count} voxels in ${format.toUpperCase()} format...`);
+            const exportData = []; const matrix = new THREE.Matrix4(); const position = new THREE.Vector3(); const color = new THREE.Color();
+            for (let i = 0; i < count; i++) {
+                voxelMesh.getMatrixAt(i, matrix); position.setFromMatrixPosition(matrix);
+                if (voxelMesh.instanceColor) { voxelMesh.getColorAt(i, color); } else { color.set(0.5, 0.5, 0.5); }
+                exportData.push({
+                    position: [ parseFloat(position.x.toFixed(5)), parseFloat(position.y.toFixed(5)), parseFloat(position.z.toFixed(5)) ],
+                    color: [ parseFloat(color.r.toFixed(5)), parseFloat(color.g.toFixed(5)), parseFloat(color.b.toFixed(5)) ] });
+            }
+            let fileContent = ''; let mimeType = ''; let fileName = '';
+            if (format === 'json') {
+                const jsonData = { voxelSize: currentVoxelSize, voxels: exportData };
+                fileContent = JSON.stringify(jsonData, null, 2); mimeType = 'application/json'; fileName = 'voxel-model.json';
+            } else if (format === 'js') {
+                let jsString = `// Voxel data generated on ${new Date().toISOString()}\n// Voxel Size used: ${currentVoxelSize}\n\nconst voxelData = {\n  voxelSize: ${currentVoxelSize},\n  voxels: [\n`;
+                exportData.forEach((voxel, index) => { jsString += `    { position: [${voxel.position.join(', ')}], color: [${voxel.color.join(', ')}] }${index < exportData.length - 1 ? ',' : ''}\n`; });
+                jsString += `  ]\n};\n\n/*\n// Example function ... \n*/\n`; // Snipped example for brevity
+                fileContent = jsString; mimeType = 'text/javascript'; fileName = 'voxel-model.js';
+            } else { console.error("Unsupported export format:", format); return; }
+            const blob = new Blob([fileContent], { type: mimeType }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); console.log(`Exported ${fileName}`);
+        }
+        // --- END: Voxel Export Logic ---
+
+        // --- Function to apply all current effect states (mostly to original) ---
+        function applyCurrentEffects() {
+            // This primarily applies to the original model now
+            if (currentModel && currentModel.visible) {
+                 handleWireframe(); handleGlow(); handleTransparency(); applyColorTint(currentColorTint);
+            }
+            // Apply scene-wide effects regardless
+            handleFog();
+            handleLightIntensity(); // Light intensity affects both if voxel uses standard material
+            handleBloom(); handleBloomParams();
+        }
+
+        // --- Effect Control Functions (Primarily for Original Model) ---
+         let currentColorTint = null;
+         function handleWireframe() { if (!currentModel || !currentModel.visible) return; const c = wireframeCheckbox.checked; currentModel.traverse(o => { if(o.isMesh && o.material) o.material.wireframe = c; }); }
+         function handleGlow() { if (!currentModel || !currentModel.visible) return; const c = glowCheckbox.checked; currentModel.traverse(o => { if(o.isMesh && o.material?.emissiveIntensity !== undefined){ const orig = originalMaterials.get(o.uuid); o.material.emissive = c ? new THREE.Color(0xffff99) : (orig ? orig.emissive.clone() : new THREE.Color(0)); o.material.emissiveIntensity = c ? 0.6 : (orig ? orig.emissiveIntensity : 0); o.material.needsUpdate=true;}}); }
+         function handleFog() { if (fogCheckbox.checked) { const bg = scene.background instanceof THREE.Color ? scene.background : new THREE.Color(0xcccccc); scene.fog = new THREE.Fog(bg, 15, 60); } else { scene.fog = null; } }
+         function handleTransparency() { updateAllUIOutputs(); if (!currentModel || !currentModel.visible) return; const op = parseFloat(transparencySlider.value); currentModel.traverse(o => { if(o.isMesh && o.material){ const orig=originalMaterials.get(o.uuid); const origT = orig?orig.transparent:false; o.material.transparent = op<1.0 ? true : origT; o.material.opacity = op; o.material.depthWrite = op < 1.0 ? false : (orig ? orig.depthWrite : true); o.material.needsUpdate=true;}}); }
+         function applyColorTint(tintType) { currentColorTint = tintType; if (!currentModel || !currentModel.visible) return; currentModel.traverse(o => { if(o.isMesh && o.material?.color){ const orig = originalMaterials.get(o.uuid); const base = (orig?.color)?orig.color.clone():new THREE.Color(0xffffff); o.material.color.copy(base); switch(tintType){case 'autumn': o.material.color.offsetHSL(0.05, 0.1, -0.15); break; case 'frost': o.material.color.offsetHSL(0.0,-0.3,0.1); o.material.color.lerp(new THREE.Color(0xddddff),0.3); break;} o.material.needsUpdate=true;}}); }
+         function handleLightIntensity() { updateAllUIOutputs(); if(directionalLight) directionalLight.intensity = parseFloat(lightIntensitySlider.value); } // This now affects voxels too
+         function handleBloom() { const i = composer.passes.indexOf(bloomPass); if(i>-1) composer.passes.splice(i,1); if(bloomCheckbox.checked){ const oi=composer.passes.indexOf(outputPass); composer.passes.splice(oi,0,bloomPass);} handleBloomParams(); }
+         function handleBloomParams() { updateAllUIOutputs(); if (bloomPass) { bloomPass.threshold = parseFloat(bloomThresholdSlider.value); bloomPass.strength = parseFloat(bloomStrengthSlider.value); bloomPass.radius = parseFloat(bloomRadiusSlider.value); } }
+
+        // --- Window Resize Handler ---
+        function onWindowResize() {
+             const width = window.innerWidth; const height = window.innerHeight; camera.aspect = width / height;
+             camera.updateProjectionMatrix(); renderer.setSize(width, height); composer.setSize(width, height);
+        }
+
+        // --- Animation Loop Function ---
+        function animate() {
+            requestAnimationFrame(animate); const delta = Date.now() * 0.0005;
+            const modelToAnimate = (voxelMesh && voxelMesh.visible) ? voxelMesh : ((currentModel && currentModel.visible) ? currentModel : null);
+            if (modelToAnimate) {
+                if (rotateCheckbox.checked) { modelToAnimate.rotation.y += 0.005; }
+                if (swayCheckbox.checked && modelToAnimate === currentModel) {
+                     modelToAnimate.rotation.z = Math.sin(delta) * 0.02;
+                } else if (modelToAnimate === currentModel) {
+                     modelToAnimate.rotation.z = 0;
+                }
+                // Voxel model does not sway in this version
+            }
+            controls.update();
+            if (bloomCheckbox.checked && composer) { composer.render(); } else if (renderer) { renderer.render(scene, camera); }
+        }
+
+        // --- Initialize ---
+        init();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spiral Galaxy Particle Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            font-family: 'Arial', sans-serif;
+            background-color: #000; /* Black background for space */
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+        #info, #stats {
+            position: absolute;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7); /* Slightly darker */
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 250px;
+            z-index: 10;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+        }
+        #info {
+            top: 10px;
+        }
+        #stats {
+            top: 110px; /* Position below info box */
+        }
+        #controls-container {
+            position: absolute;
+            bottom: 5px; /* Closer to bottom */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column; /* Stack controls above presets */
+            align-items: center;
+            gap: 5px;
+            max-width: 98%; /* Wider */
+            z-index: 5;
+        }
+        #controls, #presets {
+             background-color: rgba(30, 30, 30, 0.85); /* Slightly darker */
+             padding: 8px 12px; /* Adjust padding */
+             border-radius: 10px;
+             display: flex;
+             flex-wrap: wrap; /* Allow wrapping */
+             gap: 6px 12px; /* Adjust gaps */
+             align-items: center;
+             justify-content: center;
+             box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+         #presets {
+            padding: 5px 10px;
+            border-radius: 8px;
+            gap: 8px;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+         }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 110px; /* Slightly smaller */
+        }
+        label {
+            font-size: 10px; /* Smaller label */
+            margin-bottom: 1px;
+            color: #bbb; /* Lighter */
+            white-space: nowrap;
+        }
+        input[type="range"], input[type="number"] {
+            padding: 0;
+            margin: 0;
+            height: 16px; /* Smaller slider */
+            cursor: grab;
+            max-width: 90px; /* Smaller */
+            accent-color: #57aeff;
+        }
+        input[type="number"] {
+             max-width: 60px; /* Smaller */
+             text-align: right;
+             background-color: #444; /* Lighter */
+             color: #fff;
+             border: 1px solid #666;
+             border-radius: 3px;
+             padding: 1px 3px; /* Smaller padding */
+             font-size: 11px; /* Smaller font */
+        }
+        .value-display {
+            font-size: 10px; /* Smaller */
+            color: #ddd; /* Lighter */
+            min-width: 30px;
+            text-align: center;
+            margin-top: 1px;
+            height: 12px; /* Fixed height */
+        }
+        button {
+            padding: 5px 10px; /* Smaller */
+            border-radius: 4px; /* Smaller radius */
+            border: none;
+            cursor: pointer;
+            background-color: #4a5568;
+            color: #fff;
+            font-size: 12px; /* Smaller font */
+            transition: background-color 0.2s ease;
+        }
+        button:hover {
+            background-color: #2d3748;
+        }
+        button.pause-button.paused {
+             background-color: #c53030;
+        }
+         button.pause-button.paused:hover {
+             background-color: #9b2c2c;
+         }
+        #presets button {
+            background-color: #4a5d74;
+            font-size: 11px; /* Smaller */
+            padding: 4px 8px; /* Smaller */
+        }
+        #presets button:hover {
+            background-color: #324154;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Spiral Galaxy Simulation<br>
+        Drag: Rotate, Scroll: Zoom, Right-drag: Pan.<br>
+        Adjust parameters & press 'Apply & Reset'.<br>
+        Spiral parameters added below.
+    </div>
+    <div id="stats">
+        Statistics:<br>
+        Particles: <span id="statParticleCount">N/A</span><br>
+        Avg Speed: <span id="statAvgSpeed">N/A</span><br>
+        Sim Time: <span id="statSimTime">0.0</span>
+    </div>
+
+    <div id="controls-container">
+         <div id="presets">
+              <button id="presetDefault">Galaxy Disk</button>
+              <button id="presetSpiral1">Spiral 1</button>
+              <button id="presetSpiral2">Spiral 2</button>
+              <button id="presetBar">Bar-Like</button>
+         </div>
+         <div id="controls">
+              <button id="pauseButton" class="pause-button">Pause</button>
+
+              <div class="control-group">
+                   <label title="Speed of simulation steps">Time Step</label>
+                   <input type="range" id="timeStepSlider" min="0.001" max="0.03" step="0.0005" value="0.008">
+                   <span class="value-display" id="timeStepValue">0.008</span>
+              </div>
+              <div class="control-group">
+                <label title="Overall particle size rendering">Particle Size</label>
+                <input type="range" id="particleSizeSlider" min="0.05" max="1.5" step="0.01" value="0.2">
+                <span class="value-display" id="particleSizeValue">0.20</span>
+              </div>
+
+              <div class="control-group">
+                    <label title="Number of simulation particles (thousands)">Particles (k)</label>
+                    <input type="number" id="particleCountInput" min="1" max="150" step="1" value="80">
+                    <span class="value-display" id="particleCountValue">80k</span>
+               </div>
+              <div class="control-group">
+                   <label title="Initial distribution radius">Galaxy Radius</label>
+                   <input type="range" id="galaxyRadiusSlider" min="10" max="200" step="1" value="60">
+                   <span class="value-display" id="galaxyRadiusValue">60</span>
+              </div>
+              <div class="control-group">
+                   <label title="Initial disk thickness">Disk Thickness</label>
+                   <input type="range" id="galaxyThicknessSlider" min="0.1" max="20" step="0.1" value="4">
+                   <span class="value-display" id="galaxyThicknessValue">4.0</span>
+              </div>
+              <div class="control-group">
+                    <label title="Initial velocity randomness">Vel. Dispersion</label>
+                    <input type="range" id="dispersionSlider" min="0" max="15" step="0.1" value="1.5">
+                    <span class="value-display" id="dispersionValue">1.5</span>
+              </div>
+
+              <div class="control-group">
+                   <label title="Effective radius of central mass influence">Bulge Radius</label>
+                   <input type="range" id="bulgeRadiusSlider" min="1" max="80" step="1" value="15">
+                   <span class="value-display" id="bulgeRadiusValue">15</span>
+              </div>
+              <div class="control-group">
+                   <label title="Strength of central gravity (arbitrary units)">Bulge Mass (k)</label>
+                   <input type="range" id="bulgeMassSlider" min="100" max="20000" step="100" value="6000">
+                   <span class="value-display" id="bulgeMassValue">6.0k</span>
+              </div>
+               <div class="control-group">
+                     <label title="Universal gravitational constant multiplier">Gravity Const.</label>
+                     <input type="range" id="gravitySlider" min="0.005" max="0.5" step="0.005" value="0.05">
+                     <span class="value-display" id="gravityValue">0.050</span>
+               </div>
+               <div class="control-group">
+                    <label title="Prevents extreme forces at center">Softening Len.</label>
+                    <input type="range" id="softeningSlider" min="0.1" max="20.0" step="0.1" value="3.0">
+                    <span class="value-display" id="softeningValue">3.0</span>
+               </div>
+
+              <div class="control-group">
+                    <label title="Number of spiral arms (usually 2)"># Arms</label>
+                    <input type="number" id="spiralArmCountInput" min="1" max="8" step="1" value="2">
+                    <span class="value-display" id="spiralArmCountValue">2</span>
+               </div>
+               <div class="control-group">
+                    <label title="How tightly wound (lower=tighter)">Pitch Angle (°)</label>
+                    <input type="range" id="spiralPitchAngleSlider" min="5" max="45" step="1" value="15">
+                    <span class="value-display" id="spiralPitchAngleValue">15°</span>
+               </div>
+                <div class="control-group">
+                    <label title="Strength of the spiral arm perturbation">Spiral Strength</label>
+                    <input type="range" id="spiralStrengthSlider" min="0" max="0.5" step="0.005" value="0.08">
+                    <span class="value-display" id="spiralStrengthValue">0.080</span>
+               </div>
+                <div class="control-group">
+                    <label title="Rotation speed of the spiral pattern">Pattern Speed</label>
+                    <input type="range" id="spiralPatternSpeedSlider" min="-0.5" max="0.5" step="0.005" value="0.04">
+                    <span class="value-display" id="spiralPatternSpeedValue">0.040</span>
+               </div>
+
+              <button id="resetButton">Apply & Reset</button>
+         </div>
+    </div>
+
+
+    <canvas id="galaxyCanvas"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --- Configuration (use 'let' for controllable variables) ---
+        // Galaxy Structure
+        let PARTICLE_COUNT = 80000;
+        let GALAXY_RADIUS = 60;     // Initial distribution radius
+        let GALAXY_THICKNESS = 4;  // Initial disk thickness
+        let VELOCITY_DISPERSION = 1.5; // Initial random velocity component
+        let PARTICLE_SIZE = 0.2;
+
+        // Central Force (Bulge/Core)
+        let BULGE_RADIUS = 15;     // Radius for switching potential/initial speed calculation
+        let BULGE_MASS = 6000;   // Effective mass of the central component
+        let GRAVITATIONAL_CONSTANT = 0.05;
+        let softeningLength = 3.0;   // Prevents singularity at r=0
+
+        // Spiral Arm Parameters
+        let SPIRAL_ARM_COUNT = 2;
+        let SPIRAL_PITCH_ANGLE = 15; // In degrees
+        let SPIRAL_STRENGTH = 0.08; // Amplitude of the spiral force perturbation
+        let SPIRAL_PATTERN_SPEED = 0.04; // Angular speed of the spiral pattern
+        let SPIRAL_REFERENCE_RADIUS = 10; // Radius where log term is zero
+
+        // --- Simulation State ---
+        let isPaused = false;
+        let averageSpeed = 0; // For statistics
+        let simulationTime = 0.0; // Total simulation time elapsed
+
+        // --- Global Variables ---
+        let scene, camera, renderer, controls;
+        let particlesGeometry, particlesMaterial, particleSystem;
+        let positions, velocities; // TypedArrays for particle data
+        let timeStep = 0.008; // Simulation time step
+
+        // --- References to UI Elements ---
+        let timeStepSlider, timeStepValueSpan;
+        let particleCountInput, particleCountValueSpan;
+        let galaxyRadiusSlider, galaxyRadiusValueSpan;
+        let galaxyThicknessSlider, galaxyThicknessValueSpan;
+        let bulgeRadiusSlider, bulgeRadiusValueSpan;
+        let bulgeMassSlider, bulgeMassValueSpan;
+        let gravitySlider, gravityValueSpan;
+        let dispersionSlider, dispersionValueSpan;
+        let particleSizeSlider, particleSizeValueSpan;
+        let softeningSlider, softeningValueSpan;
+        // Spiral UI Refs
+        let spiralArmCountInput, spiralArmCountValueSpan;
+        let spiralPitchAngleSlider, spiralPitchAngleValueSpan;
+        let spiralStrengthSlider, spiralStrengthValueSpan;
+        let spiralPatternSpeedSlider, spiralPatternSpeedValueSpan;
+
+        let resetButton, pauseButton;
+        let presetDefaultButton, presetSpiral1Button, presetSpiral2Button, presetBarButton; // Updated preset buttons
+        let statParticleCountSpan, statAvgSpeedSpan, statSimTimeSpan;
+
+        // --- Presets Definition ---
+        const presets = {
+            default: { // More like a basic disk
+                PARTICLE_COUNT: 100000, GALAXY_RADIUS: 50, GALAXY_THICKNESS: 5, VELOCITY_DISPERSION: 3, PARTICLE_SIZE: 0.25,
+                BULGE_RADIUS: 20, BULGE_MASS: 5000, GRAVITATIONAL_CONSTANT: 0.08, softeningLength: 5.0, timeStep: 0.01,
+                SPIRAL_ARM_COUNT: 2, SPIRAL_PITCH_ANGLE: 15, SPIRAL_STRENGTH: 0, SPIRAL_PATTERN_SPEED: 0.05, SPIRAL_REFERENCE_RADIUS: 10
+            },
+            spiral1: { // A standard spiral
+                PARTICLE_COUNT: 80000, GALAXY_RADIUS: 60, GALAXY_THICKNESS: 4, VELOCITY_DISPERSION: 1.5, PARTICLE_SIZE: 0.2,
+                BULGE_RADIUS: 15, BULGE_MASS: 6000, GRAVITATIONAL_CONSTANT: 0.05, softeningLength: 3.0, timeStep: 0.008,
+                SPIRAL_ARM_COUNT: 2, SPIRAL_PITCH_ANGLE: 15, SPIRAL_STRENGTH: 0.08, SPIRAL_PATTERN_SPEED: 0.04, SPIRAL_REFERENCE_RADIUS: 10
+            },
+             spiral2: { // Tighter, stronger arms
+                PARTICLE_COUNT: 90000, GALAXY_RADIUS: 55, GALAXY_THICKNESS: 3.5, VELOCITY_DISPERSION: 1.0, PARTICLE_SIZE: 0.18,
+                BULGE_RADIUS: 12, BULGE_MASS: 7000, GRAVITATIONAL_CONSTANT: 0.06, softeningLength: 2.5, timeStep: 0.007,
+                SPIRAL_ARM_COUNT: 2, SPIRAL_PITCH_ANGLE: 12, SPIRAL_STRENGTH: 0.12, SPIRAL_PATTERN_SPEED: 0.035, SPIRAL_REFERENCE_RADIUS: 8
+            },
+            bar: { // More bar-like (stronger arms, lower pitch can look like bar)
+                 PARTICLE_COUNT: 70000, GALAXY_RADIUS: 45, GALAXY_THICKNESS: 5, VELOCITY_DISPERSION: 2.0, PARTICLE_SIZE: 0.22,
+                 BULGE_RADIUS: 18, BULGE_MASS: 5500, GRAVITATIONAL_CONSTANT: 0.05, softeningLength: 4.0, timeStep: 0.009,
+                 SPIRAL_ARM_COUNT: 2, SPIRAL_PITCH_ANGLE: 30, SPIRAL_STRENGTH: 0.15, SPIRAL_PATTERN_SPEED: 0.03, SPIRAL_REFERENCE_RADIUS: 12 // Higher strength, slightly lower speed
+            }
+        };
+
+        // --- Initialization ---
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000); // Increased far plane
+            const canvas = document.getElementById('galaxyCanvas');
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" }); // Added powerPreference
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setClearColor(0x000000);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false; // Keep false for intuitive rotation
+
+            setupUI(); // Setup UI elements and listeners
+            loadPreset('spiral1'); // Load default preset on startup
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        // --- Particle Creation ---
+        function createParticles() {
+             if (particleSystem) {
+                 scene.remove(particleSystem);
+                 if (particlesGeometry) particlesGeometry.dispose();
+                 if (particlesMaterial) particlesMaterial.dispose();
+                 particleSystem = null; particlesGeometry = null; particlesMaterial = null;
+             }
+
+             // Validate particle count
+             if (PARTICLE_COUNT > 200000) PARTICLE_COUNT = 200000;
+             if (PARTICLE_COUNT < 1) PARTICLE_COUNT = 1;
+
+             particlesGeometry = new THREE.BufferGeometry();
+             positions = new Float32Array(PARTICLE_COUNT * 3);
+             velocities = new Float32Array(PARTICLE_COUNT * 3);
+             const colors = new Float32Array(PARTICLE_COUNT * 3);
+
+             const colorInside = new THREE.Color(0xffe0b3); // Warmer center
+             const colorOutside = new THREE.Color(0xadcfff); // Bluer outside
+             const effectiveBulgeRadius = Math.max(0.1, Math.min(BULGE_RADIUS, GALAXY_RADIUS * 0.9)); // Ensure positive
+
+             // Approximate orbital speed Vc at radius R based on central mass M
+             // Vc = sqrt(G*M/R) for R > bulge, adjusted inside bulge
+             // We use this *only* for initial velocity setting. Actual dynamics use forces.
+             function getInitialOrbitalSpeed(r) {
+                if (r < 0.01) return 0;
+                // Simple model: linear increase inside bulge, Keplerian outside
+                // More realistic would use bulge density profile, but this is okay for init
+                const massInsideR = BULGE_MASS * Math.min(1, (r / effectiveBulgeRadius)**2); // Very rough mass scaling inside bulge
+                return Math.sqrt(GRAVITATIONAL_CONSTANT * massInsideR / r);
+
+                // Alternative: flat rotation curve approximation beyond bulge
+                // const speedAtBulgeEdge = Math.sqrt(GRAVITATIONAL_CONSTANT * BULGE_MASS / effectiveBulgeRadius);
+                // if (r <= effectiveBulgeRadius) {
+                //     return speedAtBulgeEdge * (r / effectiveBulgeRadius); // Linear rise inside bulge
+                // } else {
+                //     // Could use Keplerian decay: Math.sqrt(GRAVITATIONAL_CONSTANT * BULGE_MASS / r)
+                //     // Or keep it flat: return speedAtBulgeEdge; // Flat rotation curve approx
+                //     return Math.sqrt(GRAVITATIONAL_CONSTANT * BULGE_MASS / r); // Keplerian seems more stable here
+                // }
+             }
+
+             for (let i = 0; i < PARTICLE_COUNT; i++) {
+                 const i3 = i * 3;
+                 // Exponential disk distribution is more realistic, but random is simpler
+                 const radius = Math.random() * GALAXY_RADIUS;
+                 // Add slight bias towards center? Maybe later.
+                 // let radius = GALAXY_RADIUS * Math.sqrt(Math.random()); // Bias towards center
+
+                 const angle = Math.random() * Math.PI * 2;
+                 const x = radius * Math.cos(angle);
+                 const z = radius * Math.sin(angle);
+
+                 // Vertical distribution - Gaussian is better, but approx with power law
+                 const thicknessFactor = Math.exp(-radius / (GALAXY_RADIUS * 0.5)); // Thinner further out
+                 const y = (Math.random() - 0.5) * 2 * (Math.random()**1.5) * GALAXY_THICKNESS * thicknessFactor; // Peaked at z=0
+
+
+                 positions[i3] = x; positions[i3 + 1] = y; positions[i3 + 2] = z;
+
+                 const r_plane = Math.sqrt(x * x + z * z);
+                 const orbitalSpeed = getInitialOrbitalSpeed(r_plane);
+
+                 // Initial velocity tangential to the radius in the x-z plane
+                 const vX = (r_plane > 0.01) ? -orbitalSpeed * (z / r_plane) : 0;
+                 const vZ = (r_plane > 0.01) ? orbitalSpeed * (x / r_plane) : 0;
+                 const vY = 0; // Start planar
+
+                 // Add velocity dispersion (random thermal-like motion)
+                 const dispersionX = (Math.random() - 0.5) * VELOCITY_DISPERSION;
+                 const dispersionY = (Math.random() - 0.5) * VELOCITY_DISPERSION * 0.5; // Less vertical dispersion
+                 const dispersionZ = (Math.random() - 0.5) * VELOCITY_DISPERSION;
+
+                 velocities[i3] = vX + dispersionX;
+                 velocities[i3 + 1] = vY + dispersionY;
+                 velocities[i3 + 2] = vZ + dispersionZ;
+
+                 // Color based on distance from center
+                 const color = new THREE.Color();
+                 const colorLerpFactor = Math.min(1, r_plane / (GALAXY_RADIUS * 0.8)); // Color transition radius
+                 color.lerpColors(colorInside, colorOutside, colorLerpFactor);
+                 colors[i3] = color.r; colors[i3 + 1] = color.g; colors[i3 + 2] = color.b;
+             }
+
+             particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+             particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+             particlesMaterial = new THREE.PointsMaterial({
+                 size: PARTICLE_SIZE, vertexColors: true, blending: THREE.AdditiveBlending,
+                 transparent: true, depthWrite: false, sizeAttenuation: true
+             });
+             particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+             scene.add(particleSystem);
+
+             simulationTime = 0.0; // Reset simulation time
+             updateStatsDisplay();
+        }
+
+        // --- UI Setup ---
+        function setupUI() {
+            // Get references
+            timeStepSlider = document.getElementById('timeStepSlider'); timeStepValueSpan = document.getElementById('timeStepValue');
+            particleCountInput = document.getElementById('particleCountInput'); particleCountValueSpan = document.getElementById('particleCountValue');
+            galaxyRadiusSlider = document.getElementById('galaxyRadiusSlider'); galaxyRadiusValueSpan = document.getElementById('galaxyRadiusValue');
+            galaxyThicknessSlider = document.getElementById('galaxyThicknessSlider'); galaxyThicknessValueSpan = document.getElementById('galaxyThicknessValue');
+            bulgeRadiusSlider = document.getElementById('bulgeRadiusSlider'); bulgeRadiusValueSpan = document.getElementById('bulgeRadiusValue');
+            bulgeMassSlider = document.getElementById('bulgeMassSlider'); bulgeMassValueSpan = document.getElementById('bulgeMassValue');
+            gravitySlider = document.getElementById('gravitySlider'); gravityValueSpan = document.getElementById('gravityValue');
+            dispersionSlider = document.getElementById('dispersionSlider'); dispersionValueSpan = document.getElementById('dispersionValue');
+            particleSizeSlider = document.getElementById('particleSizeSlider'); particleSizeValueSpan = document.getElementById('particleSizeValue');
+            softeningSlider = document.getElementById('softeningSlider'); softeningValueSpan = document.getElementById('softeningValue');
+            // Spiral UI Refs
+            spiralArmCountInput = document.getElementById('spiralArmCountInput'); spiralArmCountValueSpan = document.getElementById('spiralArmCountValue');
+            spiralPitchAngleSlider = document.getElementById('spiralPitchAngleSlider'); spiralPitchAngleValueSpan = document.getElementById('spiralPitchAngleValue');
+            spiralStrengthSlider = document.getElementById('spiralStrengthSlider'); spiralStrengthValueSpan = document.getElementById('spiralStrengthValue');
+            spiralPatternSpeedSlider = document.getElementById('spiralPatternSpeedSlider'); spiralPatternSpeedValueSpan = document.getElementById('spiralPatternSpeedValue');
+
+
+            resetButton = document.getElementById('resetButton');
+            pauseButton = document.getElementById('pauseButton');
+            presetDefaultButton = document.getElementById('presetDefault');
+            presetSpiral1Button = document.getElementById('presetSpiral1');
+            presetSpiral2Button = document.getElementById('presetSpiral2');
+            presetBarButton = document.getElementById('presetBar'); // Bar preset button
+            statParticleCountSpan = document.getElementById('statParticleCount');
+            statAvgSpeedSpan = document.getElementById('statAvgSpeed');
+            statSimTimeSpan = document.getElementById('statSimTime');
+
+
+            // --- Add Event Listeners ---
+            pauseButton.addEventListener('click', togglePause);
+            resetButton.addEventListener('click', applyConfigAndReset);
+
+            // Preset Buttons
+            presetDefaultButton.addEventListener('click', () => loadPreset('default'));
+            presetSpiral1Button.addEventListener('click', () => loadPreset('spiral1'));
+            presetSpiral2Button.addEventListener('click', () => loadPreset('spiral2'));
+            presetBarButton.addEventListener('click', () => loadPreset('bar'));
+
+
+            // Live update controls (no reset needed)
+            particleSizeSlider.addEventListener('input', () => {
+                 PARTICLE_SIZE = parseFloat(particleSizeSlider.value);
+                 particleSizeValueSpan.textContent = PARTICLE_SIZE.toFixed(2);
+                 if (particlesMaterial) particlesMaterial.size = PARTICLE_SIZE;
+            });
+
+             // Controls requiring reset (update display only, apply on reset button)
+             timeStepSlider.addEventListener('input', () => timeStepValueSpan.textContent = parseFloat(timeStepSlider.value).toFixed(3));
+             particleCountInput.addEventListener('input', () => particleCountValueSpan.textContent = `${particleCountInput.value}k`);
+             galaxyRadiusSlider.addEventListener('input', () => galaxyRadiusValueSpan.textContent = galaxyRadiusSlider.value);
+             galaxyThicknessSlider.addEventListener('input', () => galaxyThicknessValueSpan.textContent = parseFloat(galaxyThicknessSlider.value).toFixed(1));
+             bulgeRadiusSlider.addEventListener('input', () => bulgeRadiusValueSpan.textContent = bulgeRadiusSlider.value);
+             bulgeMassSlider.addEventListener('input', () => bulgeMassValueSpan.textContent = `${(bulgeMassSlider.value / 1000).toFixed(1)}k`);
+             gravitySlider.addEventListener('input', () => gravityValueSpan.textContent = parseFloat(gravitySlider.value).toFixed(3));
+             dispersionSlider.addEventListener('input', () => dispersionValueSpan.textContent = parseFloat(dispersionSlider.value).toFixed(1));
+             softeningSlider.addEventListener('input', () => softeningValueSpan.textContent = parseFloat(softeningSlider.value).toFixed(1));
+            // Spiral UI Listeners
+            spiralArmCountInput.addEventListener('input', () => spiralArmCountValueSpan.textContent = spiralArmCountInput.value);
+            spiralPitchAngleSlider.addEventListener('input', () => spiralPitchAngleValueSpan.textContent = `${spiralPitchAngleSlider.value}°`);
+            spiralStrengthSlider.addEventListener('input', () => spiralStrengthValueSpan.textContent = parseFloat(spiralStrengthSlider.value).toFixed(3));
+            spiralPatternSpeedSlider.addEventListener('input', () => spiralPatternSpeedValueSpan.textContent = parseFloat(spiralPatternSpeedSlider.value).toFixed(3));
+        }
+
+        // --- Update UI Controls ---
+        // Sets all control elements to match the current global config variables
+        function updateUIControls() {
+            timeStepSlider.value = timeStep; timeStepValueSpan.textContent = timeStep.toFixed(3);
+            particleCountInput.value = PARTICLE_COUNT / 1000; particleCountValueSpan.textContent = `${PARTICLE_COUNT / 1000}k`;
+            galaxyRadiusSlider.value = GALAXY_RADIUS; galaxyRadiusValueSpan.textContent = GALAXY_RADIUS;
+            galaxyThicknessSlider.value = GALAXY_THICKNESS; galaxyThicknessValueSpan.textContent = GALAXY_THICKNESS.toFixed(1);
+            bulgeRadiusSlider.value = BULGE_RADIUS; bulgeRadiusValueSpan.textContent = BULGE_RADIUS;
+            bulgeMassSlider.value = BULGE_MASS; bulgeMassValueSpan.textContent = `${(BULGE_MASS / 1000).toFixed(1)}k`;
+            gravitySlider.value = GRAVITATIONAL_CONSTANT; gravityValueSpan.textContent = GRAVITATIONAL_CONSTANT.toFixed(3);
+            dispersionSlider.value = VELOCITY_DISPERSION; dispersionValueSpan.textContent = VELOCITY_DISPERSION.toFixed(1);
+            particleSizeSlider.value = PARTICLE_SIZE; particleSizeValueSpan.textContent = PARTICLE_SIZE.toFixed(2);
+            softeningSlider.value = softeningLength; softeningValueSpan.textContent = softeningLength.toFixed(1);
+            // Spiral UI Updates
+            spiralArmCountInput.value = SPIRAL_ARM_COUNT; spiralArmCountValueSpan.textContent = SPIRAL_ARM_COUNT;
+            spiralPitchAngleSlider.value = SPIRAL_PITCH_ANGLE; spiralPitchAngleValueSpan.textContent = `${SPIRAL_PITCH_ANGLE}°`;
+            spiralStrengthSlider.value = SPIRAL_STRENGTH; spiralStrengthValueSpan.textContent = SPIRAL_STRENGTH.toFixed(3);
+            spiralPatternSpeedSlider.value = SPIRAL_PATTERN_SPEED; spiralPatternSpeedValueSpan.textContent = SPIRAL_PATTERN_SPEED.toFixed(3);
+
+            if (particlesMaterial) { particlesMaterial.size = PARTICLE_SIZE; } // Update particle size live
+        }
+
+        // --- Load Preset ---
+        function loadPreset(presetName) {
+            const preset = presets[presetName];
+            if (!preset) { console.error("Preset not found:", presetName); return; }
+            console.log("Loading preset:", presetName);
+
+            // Update global config variables from preset
+            PARTICLE_COUNT = preset.PARTICLE_COUNT;
+            GALAXY_RADIUS = preset.GALAXY_RADIUS;
+            GALAXY_THICKNESS = preset.GALAXY_THICKNESS;
+            BULGE_RADIUS = preset.BULGE_RADIUS;
+            BULGE_MASS = preset.BULGE_MASS;
+            GRAVITATIONAL_CONSTANT = preset.GRAVITATIONAL_CONSTANT;
+            VELOCITY_DISPERSION = preset.VELOCITY_DISPERSION;
+            PARTICLE_SIZE = preset.PARTICLE_SIZE;
+            timeStep = preset.timeStep;
+            softeningLength = preset.softeningLength;
+            // Spiral Params
+            SPIRAL_ARM_COUNT = preset.SPIRAL_ARM_COUNT;
+            SPIRAL_PITCH_ANGLE = preset.SPIRAL_PITCH_ANGLE;
+            SPIRAL_STRENGTH = preset.SPIRAL_STRENGTH;
+            SPIRAL_PATTERN_SPEED = preset.SPIRAL_PATTERN_SPEED;
+            SPIRAL_REFERENCE_RADIUS = preset.SPIRAL_REFERENCE_RADIUS;
+
+
+            updateUIControls(); // Update sliders/inputs to match loaded preset
+            resetSimulation(); // Reset simulation with the new parameters
+        }
+
+        // --- Apply Config and Reset ---
+        function applyConfigAndReset() {
+             console.log("Applying UI settings and resetting...");
+             // Read values from UI elements into global variables
+             PARTICLE_COUNT = parseInt(particleCountInput.value, 10) * 1000;
+             GALAXY_RADIUS = parseFloat(galaxyRadiusSlider.value);
+             GALAXY_THICKNESS = parseFloat(galaxyThicknessSlider.value);
+             BULGE_RADIUS = parseFloat(bulgeRadiusSlider.value);
+             BULGE_MASS = parseFloat(bulgeMassSlider.value);
+             GRAVITATIONAL_CONSTANT = parseFloat(gravitySlider.value);
+             VELOCITY_DISPERSION = parseFloat(dispersionSlider.value);
+             PARTICLE_SIZE = parseFloat(particleSizeSlider.value);
+             timeStep = parseFloat(timeStepSlider.value);
+             softeningLength = parseFloat(softeningSlider.value);
+            // Spiral Params from UI
+            SPIRAL_ARM_COUNT = parseInt(spiralArmCountInput.value, 10);
+            SPIRAL_PITCH_ANGLE = parseFloat(spiralPitchAngleSlider.value);
+            SPIRAL_STRENGTH = parseFloat(spiralStrengthSlider.value);
+            SPIRAL_PATTERN_SPEED = parseFloat(spiralPatternSpeedSlider.value);
+             // SPIRAL_REFERENCE_RADIUS is not currently user-adjustable, use preset/default
+
+             updateUIControls(); // Ensure UI display matches applied values
+             resetSimulation();
+        }
+
+        // --- Simulation Reset Function ---
+        function resetSimulation() {
+            console.log("Resetting simulation...");
+            createParticles(); // Recreate particles using current global config
+            // Reset camera position based on new radius
+            camera.position.set(0, GALAXY_RADIUS * 1.2, GALAXY_RADIUS * 1.8); // Oblique view
+            controls.target.set(0, 0, 0);
+            controls.maxDistance = GALAXY_RADIUS * 15;
+            controls.minDistance = 1; // Allow closer zoom
+            controls.update();
+
+            averageSpeed = 0; // Reset calculated average speed
+            simulationTime = 0.0; // Reset time
+            updateStatsDisplay(); // Update stats display immediately
+        }
+
+        // --- Toggle Pause ---
+        function togglePause() {
+            isPaused = !isPaused;
+            pauseButton.textContent = isPaused ? "Resume" : "Pause";
+            pauseButton.classList.toggle('paused', isPaused);
+            console.log(isPaused ? "Simulation Paused" : "Simulation Resumed");
+        }
+
+        // --- Update Statistics Display ---
+        function updateStatsDisplay() {
+             if (!statParticleCountSpan || !statAvgSpeedSpan || !statSimTimeSpan) return; // Check elements
+             statParticleCountSpan.textContent = `${(PARTICLE_COUNT / 1000).toFixed(0)}k`;
+             statAvgSpeedSpan.textContent = averageSpeed.toFixed(2);
+             statSimTimeSpan.textContent = simulationTime.toFixed(1); // Display simulation time
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isPaused) {
+                const currentTimestep = timeStep; // Use the current timeStep value
+                updateParticles(currentTimestep); // Pass timestep to update function
+                simulationTime += currentTimestep; // Increment simulation time
+                controls.update(); // Only update controls if not paused (for damping)
+                 // Update stats display periodically (e.g., every frame when running)
+                 updateStatsDisplay();
+            }
+            // Render happens even if paused, to allow camera movement
+            renderer.render(scene, camera);
+        }
+
+        // --- Particle Physics Update (with Spiral Force) ---
+        function updateParticles(dt) { // dt is the time step
+            if (!particleSystem || !particlesGeometry || !positions || !velocities) return;
+            const positionsAttribute = particlesGeometry.getAttribute('position');
+            if (!positionsAttribute) return;
+            const currentPositions = positionsAttribute.array;
+
+            const softeningLengthSq = softeningLength * softeningLength;
+            const G = GRAVITATIONAL_CONSTANT;
+            const M_bulge = BULGE_MASS;
+
+            // Spiral parameters calculation (precompute where possible)
+            const numArms = SPIRAL_ARM_COUNT;
+            const strength = SPIRAL_STRENGTH;
+            const patternSpeed = SPIRAL_PATTERN_SPEED;
+            // Pitch factor 'k' related to pitch angle 'p': k = 1 / tan(p)
+            const pitchRadians = SPIRAL_PITCH_ANGLE * Math.PI / 180.0;
+            const pitchFactor = (pitchRadians > 0.01 && pitchRadians < Math.PI/2 - 0.01) ? 1.0 / Math.tan(pitchRadians) : 0; // k=cot(p)
+            const refRadius = Math.max(0.1, SPIRAL_REFERENCE_RADIUS); // Avoid log(0)
+
+            let totalSpeedSq = 0;
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3;
+                 if (i3 + 2 >= currentPositions.length || i3 + 2 >= velocities.length) continue;
+
+                const posX = currentPositions[i3];
+                const posY = currentPositions[i3 + 1]; // Keep track of Y for vertical force/damping
+                const posZ = currentPositions[i3 + 2];
+
+                // --- 1. Central Force Calculation (Bulge) ---
+                const distanceSq = posX * posX + posY * posY + posZ * posZ;
+                const softenedDistanceSq = distanceSq + softeningLengthSq;
+                const softenedDistance = Math.sqrt(softenedDistanceSq);
+
+                let accX_central = 0, accY_central = 0, accZ_central = 0;
+
+                if (softenedDistance > 0.01) {
+                     // Force = -G * M * pos_vec / (r^2 + eps^2)^(3/2)
+                    const accelerationMagnitude = -G * M_bulge / (softenedDistanceSq * softenedDistance);
+                    accX_central = accelerationMagnitude * posX;
+                    accY_central = accelerationMagnitude * posY; // Central force pulls towards y=0 too
+                    accZ_central = accelerationMagnitude * posZ;
+                }
+                // Add a simple damping force towards the plane (y=0) to maintain disk thickness
+                const diskDampingFactor = 0.1; // Adjust as needed
+                accY_central -= posY * G * M_bulge * 0.01 / softenedDistanceSq; // Simple pull towards plane
+                accY_central -= velocities[i3+1] * diskDampingFactor * dt; // Velocity damping in Y
+
+
+                // --- 2. Spiral Arm Force Calculation ---
+                let accX_spiral = 0, accZ_spiral = 0; // Assume spiral force is mainly in the plane
+
+                if (strength > 0 && numArms > 0 && pitchFactor !== 0) {
+                    const R = Math.sqrt(posX * posX + posZ * posZ); // Radius in the plane
+
+                    if (R > 0.1) { // Only apply spiral force away from the very center
+                        const currentPhi = Math.atan2(posZ, posX); // Angle in the plane
+
+                        // Calculate the phase angle relative to the spiral pattern
+                        // Arm shape: phi_arm = k * log(R/R0) + Omega_p * t
+                        const armBaseAngle = pitchFactor * Math.log(R / refRadius) + patternSpeed * simulationTime;
+
+                        // Angle difference between particle and the nearest arm center
+                        // Phase relative to the pattern: m * (phi - phi_arm(R,t))
+                        const relativeAngle = numArms * (currentPhi - armBaseAngle);
+
+                        // Force magnitude should be max between arms, zero at arm center
+                        // Use sin(relativeAngle) for force (derivative of cos potential)
+                        // Force amplitude decays with radius (e.g., exponentially) and height
+                        const radialDecay = Math.exp(-R / (GALAXY_RADIUS * 1.5)); // Arms fade further out
+                        const verticalDecay = Math.exp(-Math.abs(posY) / (GALAXY_THICKNESS * 1.0)); // Arms weaker high above plane
+                        const forceAmplitude = strength * G * M_bulge / R * radialDecay * verticalDecay; // Scale strength relative to central force at R
+
+                        const spiralForceMag = forceAmplitude * Math.sin(relativeAngle);
+
+                        // Force direction: Primarily tangential, pushing towards the arm center (potential minimum)
+                        // Tangential direction vector: (-sin(phi), cos(phi)) in (x,z)
+                        const tangDirX = -posZ / R; // -sin(phi)
+                        const tangDirZ = posX / R;  // cos(phi)
+
+                        accX_spiral = spiralForceMag * tangDirX;
+                        accZ_spiral = spiralForceMag * tangDirZ;
+
+                         // Optional: Add a small radial component? (Pulls towards arm center)
+                         // float radDirX = posX / R;
+                         // float radDirZ = posZ / R;
+                         // accX_spiral += -spiralForceMag * radDirX * 0.1; // Small inward pull when ahead, outward when behind
+                         // accZ_spiral += -spiralForceMag * radDirZ * 0.1;
+                    }
+                }
+
+                // --- 3. Update Velocity and Position ---
+                const totalAccX = accX_central + accX_spiral;
+                const totalAccY = accY_central; // No spiral force in Y for now
+                const totalAccZ = accZ_central + accZ_spiral;
+
+                const velX = velocities[i3] += totalAccX * dt;
+                const velY = velocities[i3 + 1] += totalAccY * dt;
+                const velZ = velocities[i3 + 2] += totalAccZ * dt;
+
+                currentPositions[i3] += velX * dt;
+                currentPositions[i3 + 1] += velY * dt;
+                currentPositions[i3 + 2] += velZ * dt;
+
+                // Accumulate speed squared for average calculation
+                totalSpeedSq += velX * velX + velY * velY + velZ * velZ;
+            }
+
+            positionsAttribute.needsUpdate = true;
+
+            // Calculate and update average speed
+            if (PARTICLE_COUNT > 0) { averageSpeed = Math.sqrt(totalSpeedSq / PARTICLE_COUNT); }
+             else { averageSpeed = 0; }
+            // Statistics display is updated in animate loop when not paused
+        }
+
+        // --- Window Resize Handler ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // Handle high-DPI displays
+        }
+
+        // --- Start ---
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                init();
+                animate();
+            });
+        } else {
+            init();
+            animate();
+        }
+
+    </script>
+</body>
+</html>

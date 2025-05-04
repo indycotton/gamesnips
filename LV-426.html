@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LV-426</title>
+    <style>
+        /* --- CSS Styles --- */
+        body { margin: 0; overflow: hidden; background-color: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: white; font-family: monospace; }
+        #game-container { width: 100%; max-width: 100vw; position: relative; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        canvas#gameCanvas { display: block; max-width: 100%; max-height: 100%; }
+        #hud { position: absolute; top: 10px; left: 10px; color: lime; font-family: monospace; font-size: 16px; z-index: 10; pointer-events: none; text-shadow: 1px 1px #000; }
+        #hud > div { margin-bottom: 5px; }
+        #blocker { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,.7); display: flex; justify-content: center; align-items: center; z-index: 100; color: white; font-family: monospace; font-size: 20px; cursor: pointer; }
+        #instructions { text-align: center; background-color: rgba(20,20,20,.8); padding: 30px; border-radius: 5px; border: 1px solid #555; }
+        #instructions p { margin-bottom: 15px; }
+        #instructions p:first-child { font-size: 24px; font-weight: bold; color: #fc0; margin-bottom: 25px; }
+        #loading-text { color: #eee; font-style: italic; } /* Style for loading text */
+        #play-text { display: none; } /* Hide play text initially */
+
+        /* Removed CSS for #transparency-toggle */
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
+                "three/addons/controls/PointerLockControls.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/PointerLockControls.js",
+                "three/addons/postprocessing/EffectComposer.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/EffectComposer.js",
+                "three/addons/postprocessing/RenderPass.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/RenderPass.js",
+                "three/addons/postprocessing/FilmPass.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/FilmPass.js",
+                "three/addons/postprocessing/OutputPass.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/OutputPass.js",
+                "three/addons/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/loaders/GLTFLoader.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="blocker">
+        <div id="instructions">
+            <p>LV-426 RESCUE (FACEHUGGER)</p>
+            <p>DESTROY WALLS WITH ACID</p>
+            <p>FIND AND APPROACH THE TARGET</p>
+            <p id="loading-text">Loading Assets...</p>
+            <p id="play-text">Click to Play</p>
+            <p>Move: WASD<br/>Look: Mouse<br/>Jump: Space<br/>Shoot ACID: Left Click<br/>Shoot ROCKET: R<br/>Toggle Walls: H<br/>Toggle No Clip: C<br/>(No Clip Fly: Shift/Ctrl)<br/>Exit Lock: ESC</p> </div>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="hud">
+            <div id="health-display">Health: 100</div>
+            <div id="ammo-display">Acid: 50/100</div>
+            <div id="rocket-ammo-display">Rockets: 5/10</div>
+            <div id="objective-display">Objective: Initializing...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'; // Import GLTFLoader
+
+        console.log("LV-426 Rescue - Initializing with Pickups & Objective..."); // Updated Log
+
+        // --- Core Three.js Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a);
+        scene.fog = new THREE.Fog(0x1a1a1a, 15, 60);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const canvas = document.getElementById('gameCanvas');
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false }); // Antialias false for retro feel
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+        const filmPass = new FilmPass(10, 1, 1, false); // Adjusted FilmPass for subtle effect (was 100, 1, 100)
+        composer.addPass(filmPass);
+        const outputPass = new OutputPass();
+        composer.addPass(outputPass);
+
+        // 2. Add Random Stars
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, sizeAttenuation: true });
+
+        const starVertices = [];
+        for (let i = 0; i < 1000; i++) {
+            const x = ( Math.random() - 0.5 ) * 2000;
+            const y = ( Math.random() - 0.5 ) * 2000;
+            const z = -Math.random() * 2000; // Place stars further away
+            starVertices.push( x, y, z );
+        }
+
+        starsGeometry.setAttribute( 'position', new THREE.Float32BufferAttribute( starVertices, 3 ) );
+
+        const stars = new THREE.Points( starsGeometry, starsMaterial );
+        scene.add( stars );
+
+        // 3. Implementing Godrays (based on the linked example)
+        // This part requires significant modifications to your rendering pipeline.
+        // Here's a conceptual outline and code snippets you'll need to adapt:
+
+        // a) Add a Directional Light (this will be the source of the godrays)
+        const godRayLight = new THREE.DirectionalLight( 0xffffff, 1.0 );
+        godRayLight.position.set( 100, 100, 100 ); // Adjust position as needed
+        scene.add( godRayLight );
+
+        // b) Import necessary passes for godrays (you might need to add these to your importmap if not already present)
+        // import { GodRaysFakeSunPass } from 'three/addons/postprocessing/GodRaysFakeSunPass.js';
+        // import { GodRaysRenderPass } from 'three/addons/postprocessing/GodRaysRenderPass.js';
+        // import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        // import { AdditiveBlendingShader } from 'three/addons/shaders/AdditiveBlendingShader.js';
+
+        // c) Create render targets for intermediate results
+        const renderTarget = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight );
+        const renderTarget2 = renderTarget.clone();
+
+        // d) Create the godrays passes
+        // const godRaysFakeSun = new GodRaysFakeSunPass( scene, godRayLight.position );
+        // composer.addPass( godRaysFakeSun );
+
+        // const godRaysPass = new GodRaysRenderPass( scene, camera, [godRayLight] );
+        // composer.addPass( godRaysPass );
+
+        // const additiveBlendPass = new ShaderPass(
+        //     new AdditiveBlendingShader(), 'tDiffuse', 'tAdd'
+        // );
+        // composer.addPass( additiveBlendPass );
+
+        // additiveBlendPass.uniforms[ 'tAdd' ].value = renderTarget2.texture;
+
+        // --- Game Constants ---
+        const voxelSize = 0.25; // *** MOVED DEFINITION EARLIER ***
+
+        // --- Player Constants ---
+        const playerHeight = 0.50; // Reverted Player Height
+        const playerRadius = 0.2;
+        const eyeLevel = playerHeight * 0.3; // Reverted Eye Level
+        const playerBaseOffset = eyeLevel;
+        const playerHeadOffset = playerHeight - eyeLevel;
+        let playerHealth = 100;
+        const maxHealth = 100; // Max health for pickups
+
+        // --- Player Controls Setup ---
+        const controls = new PointerLockControls(camera, document.body);
+        const blocker = document.getElementById('blocker');
+        const instructions = document.getElementById('instructions');
+        const loadingText = document.getElementById('loading-text');
+        const playText = document.getElementById('play-text');
+
+        // --- Movement Variables ---
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let moveUp = false; // For no-clip
+        let moveDown = false; // For no-clip
+        let canJump = false;
+        const velocity = new THREE.Vector3();
+        const speed = 1.0; // Reverted Speed
+        const noClipSpeedFactor = 0.5; // How much faster to move in no-clip mode
+        const jumpHeight = 9.0;
+        const gravity = 25.0;
+        const debrisGravityFactor = 0.5; // Debris less affected by gravity
+        const debrisDampingFactor = 2.0; // Debris slows down faster
+
+        // --- Shooting Variables ---
+        const projectiles = []; // Unified array for bullets and rockets
+        const bulletSpeed = 20; const bulletLifetime = 3;
+        let ammo = 50000; // Acid ammo - Start with base value
+        const maxAmmo = 100; // Max acid ammo
+        const fireRate = 0.02; // Acid fire rate
+        let canShoot = true;
+
+        // Rocket specific
+        const rocketSpeed = 15; const rocketLifetime = 4;
+        let rocketAmmo = 50000; // Rocket ammo - Start with base value
+        const maxRocketAmmo = 10; // Max rocket ammo
+        const rocketFireRate = 1.0; // Seconds between rocket shots
+        let canShootRocket = true;
+
+        // --- Debris Variables ---
+        const debris = []; // Array to hold voxel fragments
+        const debrisLifetime = 1.5; // Max seconds debris pieces last
+        const miniVoxelSize = voxelSize / 3; // Size of debris pieces (Now voxelSize is defined)
+        const miniVoxelGeometry = new THREE.BoxGeometry(miniVoxelSize, miniVoxelSize, miniVoxelSize);
+        const debrisMaterial = new THREE.MeshStandardMaterial({ // Use a slightly darker material for debris
+            color: 0x303030, // Darker grey
+            roughness: 0.9,
+            metalness: 0.05
+        });
+
+        // +++ NEW: Pickup Geometries and Materials +++
+        const healthPickupGeometry = new THREE.SphereGeometry(voxelSize * 0.4, 16, 8);
+        const healthPickupMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff00, // Green
+            emissive: 0x00cc00,
+            emissiveIntensity: 0.6,
+            roughness: 0.4,
+            metalness: 0.1
+        });
+
+        const acidAmmoPickupGeometry = new THREE.CylinderGeometry(voxelSize * 0.2, voxelSize * 0.2, voxelSize * 0.6, 12);
+        const acidAmmoPickupMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffff00, // Yellow
+            emissive: 0xcccc00,
+            emissiveIntensity: 0.6,
+            roughness: 0.4,
+            metalness: 0.1
+        });
+
+        const rocketAmmoPickupGeometry = new THREE.BoxGeometry(voxelSize * 0.3, voxelSize * 0.7, voxelSize * 0.3);
+        const rocketAmmoPickupMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff8c00, // Dark Orange
+            emissive: 0xcc7000,
+            emissiveIntensity: 0.6,
+            roughness: 0.4,
+            metalness: 0.1
+        });
+
+
+        // --- HUD ---
+        const ammoDisplay = document.getElementById('ammo-display');
+        const rocketAmmoDisplay = document.getElementById('rocket-ammo-display'); // Get rocket display element
+        const healthDisplay = document.getElementById('health-display');
+        const objectiveDisplay = document.getElementById('objective-display');
+        let currentObjective = "Initializing..."; // Will be set in initGame
+
+        function updateHUD() {
+             // Ensure display values don't visually exceed max or go below 0
+            if (ammoDisplay) ammoDisplay.textContent = `Acid: ${Math.min(ammo, maxAmmo)}/${maxAmmo}`;
+            if (rocketAmmoDisplay) rocketAmmoDisplay.textContent = `Rockets: ${Math.min(rocketAmmo, maxRocketAmmo)}/${maxRocketAmmo}`;
+            if (healthDisplay) healthDisplay.textContent = `Health: ${Math.max(0, Math.round(playerHealth))}`; // Round health
+            if (objectiveDisplay) objectiveDisplay.textContent = `Objective: ${currentObjective}`;
+        }
+        // updateHUD(); // Initial HUD update is now deferred to initGame
+
+        // --- State Variables ---
+        let wallsTransparent = false; // State variable for transparency
+        let noClipEnabled = false; // State variable for no-clip mode
+
+        // +++ NEW: Pickup Variables +++
+        const pickups = []; // Array to hold pickup objects
+        const pickupRotationSpeed = 1.0;
+        const pickupBobSpeed = 1.5;
+        const pickupBobHeight = 0.05;
+        const pickupCheckRadiusSq = 1.0 * 1.0; // Squared radius for player pickup check (1 meter radius)
+
+        // +++ NEW: Objective Variables +++
+        let objectiveTargetMesh = null; // Reference to the objective character mesh
+        let objectiveReached = false; // Flag to prevent repeated triggering
+        const objectiveReachDistance = 2.0; // How close player needs to be
+        const objectiveTargetType = 'animefoxgirl'; // Which model to use for the objective
+
+        // --- Input Event Listeners ---
+        const onKeyDown = (event) => {
+            // ... (existing onKeyDown logic - unchanged) ...
+            switch (event.code) {
+                case 'KeyW': case 'ArrowUp':     moveForward = true; break;
+                case 'KeyA': case 'ArrowLeft':  moveLeft = true; break;
+                case 'KeyS': case 'ArrowDown':  moveBackward = true; break;
+                case 'KeyD': case 'ArrowRight': moveRight = true; break;
+                case 'Space':
+                    if (noClipEnabled) {
+                        moveUp = true; // Use Space for up in no-clip
+                    } else if (canJump) {
+                        velocity.y = jumpHeight;
+                        canJump = false;
+                    }
+                    break;
+                case 'ShiftLeft': // Use Shift for up in no-clip (alternative/consistent)
+                case 'ShiftRight':
+                     if (noClipEnabled) moveUp = true;
+                     break;
+                case 'ControlLeft': // Use Ctrl for down in no-clip
+                case 'ControlRight':
+                     if (noClipEnabled) moveDown = true;
+                     break;
+                case 'KeyH': toggleWallTransparency(); break; // Toggle walls on H press
+                case 'KeyC': toggleNoClip(); break; // Toggle no-clip on C press
+                case 'KeyR': shootRocket(); break; // Shoot rocket on R press
+            }
+        };
+        const onKeyUp = (event) => {
+            // ... (existing onKeyUp logic - unchanged) ...
+            switch (event.code) {
+                case 'KeyW': case 'ArrowUp':     moveForward = false; break;
+                case 'KeyA': case 'ArrowLeft':  moveLeft = false; break;
+                case 'KeyS': case 'ArrowDown':  moveBackward = false; break;
+                case 'KeyD': case 'ArrowRight': moveRight = false; break;
+                 case 'Space': // Also handle Space key up for no-clip
+                    moveUp = false;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    moveUp = false;
+                    break;
+                case 'ControlLeft':
+                case 'ControlRight':
+                    moveDown = false;
+                    break;
+            }
+        };
+
+        // --- Shooting Functions ---
+        function shoot() { // Shoots regular acid 'bullets'
+            if (!canShoot || ammo <= 0 || !controls.isLocked) return;
+            canShoot = false; ammo--; updateHUD(); // Decrement ammo and update HUD
+
+            const bulletRadius = 0.05;
+            const bulletGeometry = new THREE.SphereGeometry(bulletRadius, 8, 8);
+            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0x82671e }); // yellow acid
+            const projectile = new THREE.Mesh(bulletGeometry, bulletMaterial);
+
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            const offsetDistance = 0.5;
+            const spawnOffset = direction.clone().multiplyScalar(offsetDistance);
+            const verticalOffset = new THREE.Vector3(0, -0.1, 0); // Adjust spawn position relative to camera
+
+            projectile.position.copy(camera.position).add(spawnOffset).add(verticalOffset);
+            projectile.userData = {
+                type: 'bullet', // Identify type
+                velocity: direction.clone().multiplyScalar(bulletSpeed),
+                spawnTime: performance.now(),
+                boundingBox: new THREE.Sphere(projectile.position.clone(), bulletRadius)
+            };
+
+            scene.add(projectile); projectiles.push(projectile);
+            setTimeout(() => { canShoot = true; }, fireRate * 1000);
+        }
+
+        function shootRocket() {
+             if (!canShootRocket || rocketAmmo <= 0 || !controls.isLocked) return;
+             canShootRocket = false; rocketAmmo--; updateHUD(); // Decrement rocket ammo
+
+             const rocketRadius = 0.1; // Slightly larger
+             const rocketLength = 0.4;
+             // Simple cylinder for rocket shape
+             const rocketGeometry = new THREE.CylinderGeometry(rocketRadius, rocketRadius, rocketLength, 8);
+             const rocketMaterial = new THREE.MeshStandardMaterial({ color: 0xff4500, emissive: 0x551100 }); // Orangey-red
+             const projectile = new THREE.Mesh(rocketGeometry, rocketMaterial);
+
+             const direction = new THREE.Vector3();
+             camera.getWorldDirection(direction);
+             const offsetDistance = 0.6; // Spawn slightly further out
+             const spawnOffset = direction.clone().multiplyScalar(offsetDistance);
+             const verticalOffset = new THREE.Vector3(0, -0.1, 0);
+
+             projectile.position.copy(camera.position).add(spawnOffset).add(verticalOffset);
+             // Orient the cylinder along the direction vector
+             projectile.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+
+             projectile.userData = {
+                 type: 'rocket', // Identify type
+                 velocity: direction.clone().multiplyScalar(rocketSpeed),
+                 spawnTime: performance.now(),
+                 // Use a sphere bounding box for simplicity in collision checks, slightly larger
+                 boundingBox: new THREE.Sphere(projectile.position.clone(), Math.max(rocketRadius, rocketLength / 2))
+             };
+
+             scene.add(projectile); projectiles.push(projectile);
+             setTimeout(() => { canShootRocket = true; }, rocketFireRate * 1000); // Use rocket fire rate
+         }
+
+        document.addEventListener('mousedown', (event) => { if (event.button === 0 && controls.isLocked) shoot(); }); // Left click for acid
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- Voxel Environment Setup ---
+        const gridSizeX = 100; const gridSizeY = 50; const gridSizeZ = 100;
+        const maxVoxels = gridSizeX * gridSizeY * gridSizeZ * 8; // Increased buffer slightly
+        const grid = {};
+        const instanceIndexToGridKey = [];
+        const environmentGeometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+        const environmentMaterial = new THREE.MeshStandardMaterial({
+            color: 0x505050,
+            roughness: 0.8,
+            metalness: 0.1,
+            transparent: false, // Initially not transparent
+            opacity: 1.0
+        });
+        const voxelMesh = new THREE.InstancedMesh(environmentGeometry, environmentMaterial, maxVoxels);
+        voxelMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(voxelMesh);
+        let currentInstanceCount = 0;
+
+        // --- Transparency Toggle Function ---
+        function toggleWallTransparency() {
+            wallsTransparent = !wallsTransparent; // Toggle state
+            environmentMaterial.transparent = wallsTransparent;
+            environmentMaterial.opacity = wallsTransparent ? 0.15 : 1.0; // Set opacity
+            environmentMaterial.needsUpdate = true; // IMPORTANT: Tell Three.js to update the material
+            console.log(`Walls transparent: ${wallsTransparent}, Opacity: ${environmentMaterial.opacity}`);
+        }
+
+        // --- No Clip Toggle Function ---
+        function toggleNoClip() {
+            noClipEnabled = !noClipEnabled;
+            console.log(`No Clip Mode: ${noClipEnabled ? 'ENABLED' : 'DISABLED'}`);
+            if (!noClipEnabled) {
+                velocity.y = 0; // Reset vertical velocity when disabling no-clip
+            }
+        }
+
+        // --- Grid Helper Functions ---
+        const getCellIndex = (worldCoord) => Math.floor(worldCoord / voxelSize);
+        const getWorldCoordBaseFromIndex = (index) => index * voxelSize;
+
+        // --- Voxel Management Functions ---
+        const tempMatrix = new THREE.Matrix4();
+        function addVoxel(baseWorldX, baseWorldY, baseWorldZ, offsetX = 0, offsetY = 0, offsetZ = 0) {
+            const key = `${baseWorldX.toFixed(2)},${baseWorldY.toFixed(2)},${baseWorldZ.toFixed(2)}`;
+            if (grid[key] !== undefined || currentInstanceCount >= maxVoxels) return;
+            const instanceIndex = currentInstanceCount;
+            const instancePosX = baseWorldX + voxelSize / 2 + offsetX;
+            const instancePosY = baseWorldY + voxelSize / 2 + offsetY;
+            const instancePosZ = baseWorldZ + voxelSize / 2 + offsetZ;
+            tempMatrix.setPosition(instancePosX, instancePosY, instancePosZ);
+            voxelMesh.setMatrixAt(instanceIndex, tempMatrix);
+            grid[key] = instanceIndex;
+            instanceIndexToGridKey[instanceIndex] = key;
+            currentInstanceCount++;
+            voxelMesh.count = currentInstanceCount;
+            voxelMesh.instanceMatrix.needsUpdate = true;
+        }
+        function removeVoxel(baseWorldX, baseWorldY, baseWorldZ) {
+            const key = `${baseWorldX.toFixed(2)},${baseWorldY.toFixed(2)},${baseWorldZ.toFixed(2)}`;
+            const removedInstanceIndex = grid[key];
+            if (removedInstanceIndex === undefined || removedInstanceIndex >= currentInstanceCount) return false; // Voxel doesn't exist or already removed
+
+            const lastInstanceIndex = currentInstanceCount - 1;
+            if (removedInstanceIndex !== lastInstanceIndex) {
+                voxelMesh.getMatrixAt(lastInstanceIndex, tempMatrix);
+                voxelMesh.setMatrixAt(removedInstanceIndex, tempMatrix);
+                const movedKey = instanceIndexToGridKey[lastInstanceIndex];
+                grid[movedKey] = removedInstanceIndex;
+                instanceIndexToGridKey[removedInstanceIndex] = movedKey;
+            }
+            delete grid[key];
+            instanceIndexToGridKey.pop();
+            currentInstanceCount--;
+            voxelMesh.count = currentInstanceCount;
+            voxelMesh.instanceMatrix.needsUpdate = true;
+            return true; // Indicate successful removal
+        }
+
+        // --- Voxel Shatter Function ---
+        const debrisCenterOffset = new THREE.Vector3();
+        const debrisVelocity = new THREE.Vector3();
+        function shatterVoxel(baseWorldX, baseWorldY, baseWorldZ) {
+             if (!removeVoxel(baseWorldX, baseWorldY, baseWorldZ)) {
+                 // console.warn(`Tried to shatter non-existent voxel at ${baseWorldX.toFixed(2)},${baseWorldY.toFixed(2)},${baseWorldZ.toFixed(2)}`);
+                 return; // Don't proceed if the voxel wasn't there
+             }
+
+             const voxelCenterX = baseWorldX + voxelSize / 2;
+             const voxelCenterY = baseWorldY + voxelSize / 2;
+             const voxelCenterZ = baseWorldZ + voxelSize / 2;
+
+             for (let i = -1; i <= 1; i++) {
+                 for (let j = -1; j <= 1; j++) {
+                     for (let k = -1; k <= 1; k++) {
+                         const miniMesh = new THREE.Mesh(miniVoxelGeometry, debrisMaterial);
+                         debrisCenterOffset.set( i * miniVoxelSize, j * miniVoxelSize, k * miniVoxelSize );
+                         miniMesh.position.set( voxelCenterX + debrisCenterOffset.x, voxelCenterY + debrisCenterOffset.y, voxelCenterZ + debrisCenterOffset.z );
+                         debrisVelocity.copy(debrisCenterOffset).normalize();
+                         debrisVelocity.x += (Math.random() - 0.5) * 0.5;
+                         debrisVelocity.y += (Math.random() - 0.5) * 0.5;
+                         debrisVelocity.z += (Math.random() - 0.5) * 0.5;
+                         debrisVelocity.normalize();
+                         const initialSpeed = 2.0 + Math.random() * 3.0; // Random outward speed
+                         debrisVelocity.multiplyScalar(initialSpeed);
+                         miniMesh.userData = {
+                             velocity: debrisVelocity.clone(), // Store velocity
+                             spawnTime: performance.now(),
+                             lifetime: debrisLifetime * (0.75 + Math.random() * 0.5) // Randomize lifetime slightly
+                         };
+                         scene.add(miniMesh);
+                         debris.push(miniMesh);
+                     }
+                 }
+             }
+         }
+
+
+        // --- Procedural Generation ---
+        console.log("Starting procedural generation...");
+        const rooms = []; const numberOfRooms = 18;
+        const minRoomDim = 15; const maxRoomDim = 30;
+        const minRoomHeight = 12; const maxRoomHeight = 20;
+        const wallOffsetAmount = voxelSize * 0.15;
+        // ... (Existing Room Generation Loop - unchanged) ...
+         for (let i = 0; i < numberOfRooms; i++) {
+             const roomWidth = Math.floor(Math.random() * (maxRoomDim - minRoomDim + 1)) + minRoomDim;
+             const roomDepth = Math.floor(Math.random() * (maxRoomDim - minRoomDim + 1)) + minRoomDim;
+             const roomHeight = Math.floor(Math.random() * (maxRoomHeight - minRoomHeight + 1)) + minRoomHeight;
+             const maxStartX_Abs = gridSizeX - roomWidth - 1; const maxStartZ_Abs = gridSizeZ - roomDepth - 1; const maxStartY_Abs = gridSizeY - roomHeight - 1;
+             if (maxStartX_Abs < 0 || maxStartZ_Abs < 0 || maxStartY_Abs < 0) { console.warn("Grid size potentially too small for room dimensions. Skipping room."); continue; }
+             const startGridX_Abs = Math.floor(Math.random() * maxStartX_Abs); const startGridZ_Abs = Math.floor(Math.random() * maxStartZ_Abs); const startGridY_Abs = Math.floor(Math.random() * maxStartY_Abs);
+             const endGridX_Abs = startGridX_Abs + roomWidth; const endGridZ_Abs = startGridZ_Abs + roomDepth; const endGridY_Abs = startGridY_Abs + roomHeight;
+             const roomCenterX_Grid = startGridX_Abs + Math.floor(roomWidth / 2) - Math.floor(gridSizeX / 2);
+             const roomCenterZ_Grid = startGridZ_Abs + Math.floor(roomDepth / 2) - Math.floor(gridSizeZ / 2);
+             const roomCenterY_Grid = startGridY_Abs + Math.floor(roomHeight / 2);
+             rooms.push({
+                 cx: roomCenterX_Grid, cz: roomCenterZ_Grid, cy: roomCenterY_Grid, y: startGridY_Abs, w: roomWidth, d: roomDepth, h: roomHeight, startGridX_Abs: startGridX_Abs, startGridZ_Abs: startGridZ_Abs
+             });
+
+             for (let gx_abs = startGridX_Abs; gx_abs < endGridX_Abs; gx_abs++) {
+                 for (let gy_abs = startGridY_Abs; gy_abs < endGridY_Abs; gy_abs++) {
+                     for (let gz_abs = startGridZ_Abs; gz_abs < endGridZ_Abs; gz_abs++) {
+                         const isBoundary = (gy_abs === startGridY_Abs || gy_abs === endGridY_Abs - 1 || gx_abs === startGridX_Abs || gx_abs === endGridX_Abs - 1 || gz_abs === startGridZ_Abs || gz_abs === endGridZ_Abs - 1);
+                         const baseWorldX = (gx_abs - gridSizeX / 2) * voxelSize;
+                         const baseWorldY = gy_abs * voxelSize;
+                         const baseWorldZ = (gz_abs - gridSizeZ / 2) * voxelSize;
+                         if (isBoundary) {
+                             const offsetX = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                             const offsetY = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                             const offsetZ = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                             addVoxel(baseWorldX, baseWorldY, baseWorldZ, offsetX, offsetY, offsetZ);
+                         }
+                     }
+                 }
+             }
+             const numberOfPillars = Math.floor(Math.random() * 4);
+             for(let p = 0; p < numberOfPillars; p++) {
+                 const pillarGridX_Abs = startGridX_Abs + 1 + Math.floor(Math.random() * (roomWidth - 2));
+                 const pillarGridZ_Abs = startGridZ_Abs + 1 + Math.floor(Math.random() * (roomDepth - 2));
+                 for(let y_abs = startGridY_Abs; y_abs < startGridY_Abs + roomHeight; y_abs++) {
+                     const baseX = (pillarGridX_Abs - gridSizeX/2) * voxelSize;
+                     const baseY = y_abs * voxelSize;
+                     const baseZ = (pillarGridZ_Abs - gridSizeZ/2) * voxelSize;
+                     const offsetX = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                     const offsetY = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                     const offsetZ = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                     addVoxel(baseX, baseY, baseZ, offsetX, offsetY, offsetZ);
+                 }
+             }
+         }
+        const corridorHeight = 6; const corridorWidth = 5;
+        // ... (Existing Corridor Carving Loop - unchanged) ...
+         for (let i = 0; i < rooms.length - 1; i++) {
+             const room1 = rooms[i]; const room2 = rooms[i + 1];
+             let currentX_Grid = room1.cx; let currentZ_Grid = room1.cz;
+             let currentY_Abs = Math.min(room1.y + 1, room2.y + 1); // Start corridor slightly above floor
+             const targetX_Grid = room2.cx; const targetZ_Grid = room2.cz;
+             const targetY_Abs_Room2 = room2.y + 1;
+
+             // Carve horizontal segment first (X)
+             while (currentX_Grid !== targetX_Grid) { const stepX = Math.sign(targetX_Grid - currentX_Grid); carveCorridorSegment(currentX_Grid, currentY_Abs, currentZ_Grid, corridorWidth, corridorHeight); currentX_Grid += stepX; }
+             carveCorridorSegment(currentX_Grid, currentY_Abs, currentZ_Grid, corridorWidth, corridorHeight); // Carve final segment at X junction
+
+             // Carve horizontal segment (Z)
+             while (currentZ_Grid !== targetZ_Grid) { const stepZ = Math.sign(targetZ_Grid - currentZ_Grid); carveCorridorSegment(currentX_Grid, currentY_Abs, currentZ_Grid, corridorWidth, corridorHeight); currentZ_Grid += stepZ; }
+             carveCorridorSegment(currentX_Grid, currentY_Abs, currentZ_Grid, corridorWidth, corridorHeight); // Carve final segment at Z junction
+
+             // Carve vertical segment (Y)
+             if (currentY_Abs < targetY_Abs_Room2) {
+                 while (currentY_Abs < targetY_Abs_Room2) { carveCorridorSegment(currentX_Grid, currentY_Abs, currentZ_Grid, corridorWidth, corridorHeight, true); currentY_Abs++; }
+             } else if (currentY_Abs > targetY_Abs_Room2) {
+                 while (currentY_Abs > targetY_Abs_Room2) { currentY_Abs--; carveCorridorSegment(currentX_Grid, currentY_Abs, currentZ_Grid, corridorWidth, corridorHeight, true); }
+             }
+             // Carve final vertical segment connecting to room2 floor level
+             carveCorridorSegment(currentX_Grid, targetY_Abs_Room2, currentZ_Grid, corridorWidth, corridorHeight, true);
+         }
+
+        function carveCorridorSegment(gridCenterX, gridCenterY_Abs, gridCenterZ, width, height, isVertical = false) {
+             // ... (Existing carveCorridorSegment logic - unchanged) ...
+             const halfWidth = Math.floor(width / 2);
+             const startCarveX_Grid = gridCenterX - halfWidth; const endCarveX_Grid = gridCenterX + width - halfWidth;
+             const startCarveZ_Grid = gridCenterZ - halfWidth; const endCarveZ_Grid = gridCenterZ + width - halfWidth;
+             const startCarveY_Abs = gridCenterY_Abs; const endCarveY_Abs = gridCenterY_Abs + height;
+
+             for(let gy_abs = startCarveY_Abs; gy_abs < endCarveY_Abs; gy_abs++) {
+                 if (gy_abs < 0 || gy_abs >= gridSizeY) continue;
+                 for(let gx_grid = startCarveX_Grid; gx_grid < endCarveX_Grid; gx_grid++) {
+                     const gx_abs_check = gx_grid + Math.floor(gridSizeX / 2);
+                     if (gx_abs_check < 0 || gx_abs_check >= gridSizeX) continue;
+                     for(let gz_grid = startCarveZ_Grid; gz_grid < endCarveZ_Grid; gz_grid++) {
+                         const gz_abs_check = gz_grid + Math.floor(gridSizeZ / 2);
+                         if (gz_abs_check < 0 || gz_abs_check >= gridSizeZ) continue;
+                         const baseWorldX = getWorldCoordBaseFromIndex(gx_grid);
+                         const baseWorldY = gy_abs * voxelSize;
+                         const baseWorldZ = getWorldCoordBaseFromIndex(gz_grid);
+                         const isCorridorBoundary = (gy_abs === startCarveY_Abs || gy_abs === endCarveY_Abs - 1 || gx_grid === startCarveX_Grid || gx_grid === endCarveX_Grid - 1 || gz_grid === startCarveZ_Grid || gz_grid === endCarveZ_Grid - 1);
+                         if (isCorridorBoundary) {
+                             const offsetX = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                             const offsetY = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                             const offsetZ = (Math.random() - 0.5) * wallOffsetAmount * 2;
+                             addVoxel(baseWorldX, baseWorldY, baseWorldZ, offsetX, offsetY, offsetZ);
+                         } else {
+                             removeVoxel(baseWorldX, baseWorldY, baseWorldZ);
+                         }
+                     }
+                 }
+             }
+         }
+        const numberOfRubblePiles = 50; const rubbleMaterial = new THREE.MeshStandardMaterial({ color: 0x303030, roughness: 0.9, metalness: 0.05 });
+        // ... (Existing Rubble Pile Generation Loop - unchanged) ...
+        for (let i = 0; i < numberOfRubblePiles; i++) {
+            const pileGridX_Abs = Math.floor(Math.random() * gridSizeX);
+            const pileGridZ_Abs = Math.floor(Math.random() * gridSizeZ);
+            let floorY_Abs = -1;
+            const baseWorldX = (pileGridX_Abs - gridSizeX / 2) * voxelSize;
+            const baseWorldZ = (pileGridZ_Abs - gridSizeZ / 2) * voxelSize;
+            for (let yCheck_Abs = gridSizeY - 1; yCheck_Abs >= 0; yCheck_Abs--) {
+                const baseWorldY = yCheck_Abs * voxelSize;
+                const key = `${baseWorldX.toFixed(2)},${baseWorldY.toFixed(2)},${baseWorldZ.toFixed(2)}`;
+                if (grid[key] !== undefined) { floorY_Abs = yCheck_Abs; break; }
+            }
+            if (floorY_Abs !== -1 && floorY_Abs < gridSizeY - 1) {
+                const baseWorldYAbove = (floorY_Abs + 1) * voxelSize;
+                const keyAbove = `${baseWorldX.toFixed(2)},${baseWorldYAbove.toFixed(2)},${baseWorldZ.toFixed(2)}`;
+                if (grid[keyAbove] === undefined) {
+                    const pileSize = Math.floor(Math.random() * 5) + 3;
+                    const baseWorldYFloorSurface = baseWorldYAbove;
+                    for (let j = 0; j < pileSize; j++) {
+                        const rubbleVoxelGeometry = new THREE.BoxGeometry(voxelSize * 0.8, voxelSize * 0.8, voxelSize * 0.8);
+                        const rubbleVoxel = new THREE.Mesh(rubbleVoxelGeometry, rubbleMaterial);
+                        const offsetX = (Math.random() - 0.5) * voxelSize * 1.2;
+                        const offsetZ = (Math.random() - 0.5) * voxelSize * 1.2;
+                        const offsetY = Math.random() * 0.5 * voxelSize;
+                        rubbleVoxel.position.set(baseWorldX + voxelSize / 2 + offsetX, baseWorldYFloorSurface + offsetY, baseWorldZ + voxelSize / 2 + offsetZ);
+                        rubbleVoxel.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                        scene.add(rubbleVoxel);
+                    }
+                }
+            }
+        }
+        console.log("Procedural generation finished.");
+
+        // --- Set Camera Start Position ---
+        // ... (Existing Camera Start Position Logic - unchanged) ...
+         let startPosFound = false;
+         let spawnWorldCoords = new THREE.Vector3(0, playerBaseOffset + voxelSize, 5); // Fallback
+         if (rooms.length > 0) {
+             const startRoom = rooms[0];
+             let attempts = 0; const maxSpawnAttempts = 50;
+             const spawnMinGridX_Abs = startRoom.startGridX_Abs + 2; const spawnMaxGridX_Abs = startRoom.startGridX_Abs + startRoom.w - 3;
+             const spawnMinGridZ_Abs = startRoom.startGridZ_Abs + 2; const spawnMaxGridZ_Abs = startRoom.startGridZ_Abs + startRoom.d - 3;
+             while(attempts < maxSpawnAttempts && !startPosFound) {
+                 const gx_abs = spawnMinGridX_Abs + Math.floor(Math.random() * (spawnMaxGridX_Abs - spawnMinGridX_Abs + 1));
+                 const gz_abs = spawnMinGridZ_Abs + Math.floor(Math.random() * (spawnMaxGridZ_Abs - spawnMinGridZ_Abs + 1));
+                 const gyFloor_Abs = startRoom.y; const gyAbove_Abs = startRoom.y + 1;
+                 const checkWorldX = (gx_abs - gridSizeX / 2) * voxelSize;
+                 const checkWorldZ = (gz_abs - gridSizeZ / 2) * voxelSize;
+                 const checkWorldYFloor = gyFloor_Abs * voxelSize;
+                 const checkWorldYAbove = gyAbove_Abs * voxelSize;
+                 const floorKey = `${checkWorldX.toFixed(2)},${checkWorldYFloor.toFixed(2)},${checkWorldZ.toFixed(2)}`;
+                 const aboveKey = `${checkWorldX.toFixed(2)},${checkWorldYAbove.toFixed(2)},${checkWorldZ.toFixed(2)}`;
+                 if (grid[floorKey] !== undefined && grid[aboveKey] === undefined) {
+                     spawnWorldCoords.x = checkWorldX + voxelSize / 2;
+                     spawnWorldCoords.y = checkWorldYFloor + voxelSize + playerBaseOffset;
+                     spawnWorldCoords.z = checkWorldZ + voxelSize / 2;
+                     startPosFound = true;
+                 }
+                 attempts++;
+             }
+             if (!startPosFound) console.warn("Could not find valid spawn point in room 0 after attempts, using fallback.");
+         }
+         camera.position.copy(spawnWorldCoords);
+         controls.getObject().position.copy(camera.position);
+         console.log("Camera position set.");
+
+
+        // --- GLB Enemy Setup ---
+        const gltfLoader = new GLTFLoader();
+        const models = {}; // To store preloaded models
+        const enemies = []; // Combined array for all enemy types
+        const tempBox = new THREE.Box3(); // Temporary box for calculations
+        const modelConfig = { // *** URLs MUST BE SERVED BY A LOCAL WEB SERVER ***
+            alien: { url: 'http://localhost/alien.glb', scale: 0.3, yOffset: 0 },
+            facehugger: { url: 'http://localhost/facehugger.glb', scale: 0.15, yOffset: 0 },
+            animefoxgirl: { url: 'http://localhost/animefoxgirl.glb', scale: 0.25, yOffset: 0 } // Used for objective
+        };
+
+        // Preload models
+        async function preloadModels() {
+             // ... (Existing preloadModels function - unchanged, includes placeholder logic) ...
+             console.log("--- Starting Model Preloading ---"); // Added start marker
+             const promises = Object.entries(modelConfig).map(([key, config]) => {
+                 return new Promise((resolve, reject) => {
+                     let actualUrl = config.url;
+                     let isPlaceholder = false; // Flag to track if we are using a placeholder
+                     console.log(`[${key}] Checking URL: "${actualUrl}"`); // Log URL being checked
+
+                     if (!actualUrl) {
+                         isPlaceholder = true;
+                         console.warn(`[${key}] URL is missing! Using placeholder geometry.`);
+                         const placeholderGeo = new THREE.BoxGeometry(voxelSize * 2, voxelSize * 4, voxelSize * 2); // Example size
+                         const placeholderMat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff, name: `PlaceholderMat_${key}` });
+                         const placeholderMesh = new THREE.Mesh(placeholderGeo, placeholderMat);
+                         const placeholderGroup = new THREE.Group();
+                         placeholderGroup.name = `PLACEHOLDER_MESH_GROUP_${key}`;
+                         placeholderGroup.add(placeholderMesh);
+                         models[key] = { scene: placeholderGroup, isPlaceholder: true }; // Store placeholder and mark it
+                         console.log(`>>> [${key}] Created MISSING URL placeholder.`);
+                         resolve(); return;
+                     }
+
+                     console.log(`[${key}] Attempting to load GLTF from: ${actualUrl}`);
+                     gltfLoader.load(
+                         actualUrl,
+                         (gltf) => { // Success
+                             console.log(`+++ [${key}] Successfully loaded GLTF from ${actualUrl}`);
+                             if (!gltf.scene || gltf.scene.children.length === 0) {
+                                 console.warn(`!!! [${key}] Loaded GLTF scene from ${actualUrl} appears to be empty.`);
+                             } else {
+                                 console.log(`+++ [${key}] GLTF scene has ${gltf.scene.children.length} children.`);
+                             }
+                             models[key] = { ...gltf, isPlaceholder: false };
+                             resolve();
+                         },
+                         (xhr) => { /* Progress callback */ },
+                         (error) => { // Error loading
+                             console.error(`!!! [${key}] Error loading GLTF from ${actualUrl}:`, error);
+                             const errorGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize); // Smaller red box
+                             const errorMat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x550000, name: `ErrorMat_${key}` });
+                             const errorMesh = new THREE.Mesh(errorGeo, errorMat);
+                             const errorGroup = new THREE.Group();
+                              errorGroup.name = `ERROR_PLACEHOLDER_GROUP_${key}`;
+                             errorGroup.add(errorMesh);
+                             models[key] = { scene: errorGroup, isPlaceholder: true };
+                             console.log(`>>> [${key}] Created ERROR placeholder due to loading failure.`);
+                             resolve(); // Resolve even on error so game can proceed
+                         }
+                     );
+                 });
+             });
+             await Promise.all(promises);
+             console.log("--- Model preloading finished ---");
+        }
+
+        // Function to find a spawn spot
+        function findRandomSpawnSpot(room) {
+             // ... (Existing findRandomSpawnSpot function - unchanged) ...
+             let attempts = 0; const maxAttempts = 20;
+             let foundSpot = false;
+             let spawnPos = null;
+             if (!room || room.w <= 4 || room.d <= 4) {
+                 console.warn("Room dimensions too small or invalid for spawning:", room);
+                 return null;
+             }
+             const spawnMinGridX_Abs = room.startGridX_Abs + 2; const spawnMaxGridX_Abs = room.startGridX_Abs + room.w - 3;
+             const spawnMinGridZ_Abs = room.startGridZ_Abs + 2; const spawnMaxGridZ_Abs = room.startGridZ_Abs + room.d - 3;
+
+             if (spawnMinGridX_Abs > spawnMaxGridX_Abs || spawnMinGridZ_Abs > spawnMaxGridZ_Abs) {
+                 console.warn("Calculated invalid spawn area for room:", room, spawnMinGridX_Abs, spawnMaxGridX_Abs, spawnMinGridZ_Abs, spawnMaxGridZ_Abs);
+                 return null;
+             }
+
+             while (attempts < maxAttempts && !foundSpot) {
+                 const gx_abs = spawnMinGridX_Abs + Math.floor(Math.random() * (spawnMaxGridX_Abs - spawnMinGridX_Abs + 1));
+                 const gz_abs = spawnMinGridZ_Abs + Math.floor(Math.random() * (spawnMaxGridZ_Abs - spawnMinGridZ_Abs + 1));
+                 const gyFloor_Abs = room.y; const gyAbove_Abs = room.y + 1;
+                 const checkWorldX = (gx_abs - gridSizeX / 2) * voxelSize;
+                 const checkWorldZ = (gz_abs - gridSizeZ / 2) * voxelSize;
+                 const checkWorldYFloor = gyFloor_Abs * voxelSize;
+                 const checkWorldYAbove = gyAbove_Abs * voxelSize;
+                 const floorKey = `${checkWorldX.toFixed(2)},${checkWorldYFloor.toFixed(2)},${checkWorldZ.toFixed(2)}`;
+                 const aboveKey = `${checkWorldX.toFixed(2)},${checkWorldYAbove.toFixed(2)},${checkWorldZ.toFixed(2)}`;
+                 if (grid[floorKey] !== undefined && grid[aboveKey] === undefined) {
+                     spawnPos = new THREE.Vector3(
+                         checkWorldX + voxelSize / 2,
+                         checkWorldYFloor + voxelSize, // Base Y position on the floor
+                         checkWorldZ + voxelSize / 2
+                     );
+                     foundSpot = true;
+                 }
+                 attempts++;
+             }
+             return spawnPos;
+         }
+
+        // +++ NEW: Function to spawn pickups +++
+        function spawnPickups(numberOfHealth, numberOfAcid, numberOfRockets) {
+             console.log(`Spawning pickups: ${numberOfHealth} health, ${numberOfAcid} acid, ${numberOfRockets} rockets...`);
+             let spawnedCount = { health: 0, acid: 0, rocket: 0 };
+
+             // Iterate through rooms (skip the first one where player spawns, and potentially the last where objective is)
+             for (let i = 1; i < rooms.length -1; i++) { // Skip first and last room
+                 if (spawnedCount.health >= numberOfHealth &&
+                     spawnedCount.acid >= numberOfAcid &&
+                     spawnedCount.rocket >= numberOfRockets) {
+                     break; // Stop if we've spawned enough of everything
+                 }
+
+                 const room = rooms[i];
+                 const spawnAttemptsPerRoom = 3; // Try a few times per room
+
+                 for (let attempt = 0; attempt < spawnAttemptsPerRoom; attempt++) {
+                     const spawnPos = findRandomSpawnSpot(room);
+                     if (spawnPos) {
+                         let pickupType = null;
+                         let pickupGeometry = null;
+                         let pickupMaterial = null;
+                         let value = 0;
+
+                         // Decide which pickup type to spawn based on remaining counts
+                         const typesNeeded = [];
+                         if (spawnedCount.health < numberOfHealth) typesNeeded.push('health');
+                         if (spawnedCount.acid < numberOfAcid) typesNeeded.push('acid');
+                         if (spawnedCount.rocket < numberOfRockets) typesNeeded.push('rocket');
+
+                         if (typesNeeded.length === 0) continue;
+
+                         pickupType = typesNeeded[Math.floor(Math.random() * typesNeeded.length)];
+
+                         switch (pickupType) {
+                             case 'health':
+                                 pickupGeometry = healthPickupGeometry;
+                                 pickupMaterial = healthPickupMaterial;
+                                 value = 25; // Amount of health restored
+                                 spawnedCount.health++;
+                                 break;
+                             case 'acid':
+                                 pickupGeometry = acidAmmoPickupGeometry;
+                                 pickupMaterial = acidAmmoPickupMaterial;
+                                 value = 20; // Amount of acid ammo restored
+                                 spawnedCount.acid++;
+                                 break;
+                             case 'rocket':
+                                 pickupGeometry = rocketAmmoPickupGeometry;
+                                 pickupMaterial = rocketAmmoPickupMaterial;
+                                 value = 2; // Amount of rocket ammo restored
+                                 spawnedCount.rocket++;
+                                 break;
+                         }
+
+                         if (pickupGeometry && pickupMaterial) {
+                             const pickupMesh = new THREE.Mesh(pickupGeometry, pickupMaterial);
+                             pickupMesh.position.copy(spawnPos).add(new THREE.Vector3(0, voxelSize * 0.4, 0)); // Position slightly above ground
+
+                             const pickupData = {
+                                 mesh: pickupMesh,
+                                 type: pickupType,
+                                 value: value,
+                                 boundingSphere: new THREE.Sphere(pickupMesh.position.clone(), voxelSize * 0.5), // Simple sphere for collision
+                                 initialY: pickupMesh.position.y // For bobbing effect
+                             };
+
+                             pickups.push(pickupData);
+                             scene.add(pickupMesh);
+                             break; // Only spawn one pickup per successful spot find
+                         }
+                     }
+                 }
+             }
+             console.log("Finished spawning pickups.");
+         }
+
+
+        // +++ UPDATED: Function to spawn an entity using preloaded models +++
+        function spawnEntity(roomIndex, type, isObjective = false) { // Added isObjective flag
+             if (rooms.length <= roomIndex || !rooms[roomIndex]) {
+                 console.warn(`Attempted to spawn entity in non-existent room index ${roomIndex}`);
+                 return null; // Return null if spawn failed
+             }
+             if (!models[type] || !models[type].scene) {
+                 console.error(`Model data structure invalid or missing for type "${type}". Cannot spawn.`);
+                 return null;
+             }
+              if (models[type].isPlaceholder) {
+                  console.log(`>>> [${type}] Spawning PLACEHOLDER scene:`, models[type].scene);
+              } else {
+                  console.log(`+++ [${type}] Spawning actual GLTF scene:`, models[type].scene);
+              }
+
+             const room = rooms[roomIndex];
+             const spawnPos = findRandomSpawnSpot(room);
+
+             if (spawnPos) {
+                 const config = modelConfig[type];
+                 const modelClone = models[type].scene.clone();
+
+                 if (config.scale) {
+                     modelClone.scale.set(config.scale, config.scale, config.scale);
+                 }
+
+                 tempBox.setFromObject(modelClone);
+                 const modelBaseOffsetY = tempBox.min.y; // Offset from model origin to bottom
+                 modelClone.position.copy(spawnPos);
+                 modelClone.position.y -= modelBaseOffsetY; // Align bottom with spawn Y
+                 modelClone.position.y += (config.yOffset || 0); // Apply manual offset
+
+                 const finalBoundingBox = new THREE.Box3().setFromObject(modelClone);
+
+                 const entityData = {
+                     mesh: modelClone,
+                     health: 100, // Objective might not need health
+                     boundingBox: finalBoundingBox,
+                     type: type,
+                     config: config,
+                     isPlaceholder: models[type].isPlaceholder,
+                     isObjective: isObjective // Store the flag here too
+                 };
+
+                 if (isObjective) {
+                     objectiveTargetMesh = modelClone; // Store reference to the objective mesh
+                     console.log(`+++ Objective target [${type}] spawned in room ${roomIndex}`);
+                     // Do NOT add to enemies array if it shouldn't be attackable/part of AI
+                 } else {
+                     enemies.push(entityData); // Only add regular enemies to the array
+                 }
+
+                 scene.add(modelClone);
+                  if (!scene.children.includes(modelClone)) {
+                      console.error(`!!! [${type}] FAILED TO ADD model clone to the scene!`);
+                  }
+                 return modelClone; // Return the spawned mesh
+
+             } else {
+                 console.warn(`Could not find valid spawn spot for ${type} in room ${roomIndex}`);
+                 return null; // Return null if spawn failed
+             }
+         }
+
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.7); // Slightly brighter ambient
+        scene.add(ambientLight);
+        const fluorescentLights = [];
+        // ... (Existing addCeilingLightFixture function - unchanged) ...
+         function addCeilingLightFixture(worldX, worldY, worldZ, roomWidth, roomDepth) {
+             const lightColor = new THREE.Color().setHSL(Math.random() * 0.1 + 0.55, 0.8, 0.6); // Bluish-white range
+             const lightIntensity = 1.0 + Math.random() * 0.5; // Flicker base intensity
+             const lightDistance = 15 + Math.random() * 5; // Affects a decent area
+
+             const pointLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance);
+             pointLight.position.set(worldX, worldY, worldZ);
+             scene.add(pointLight);
+             fluorescentLights.push(pointLight); // Keep track for flickering
+
+             const tubeLength = Math.min(roomWidth, roomDepth) * voxelSize * 0.6; // Size relative to room
+             const tubeRadius = 0.03;
+             const tubeGeometry = new THREE.BoxGeometry(tubeLength, tubeRadius * 2, tubeRadius * 2); // Use Box for simpler geometry
+             const tubeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 }); // Emissive white tubes
+             const tubeOffset = tubeRadius * 3; // Offset between tubes
+
+             const tubeMesh1 = new THREE.Mesh(tubeGeometry, tubeMaterial);
+             tubeMesh1.position.set(worldX - tubeOffset, worldY - tubeRadius * 2, worldZ); // Position below light source
+             if (roomWidth >= roomDepth) { tubeMesh1.rotation.y = Math.PI / 2; } // Orient along the longer axis
+             scene.add(tubeMesh1);
+
+             const tubeMesh2 = new THREE.Mesh(tubeGeometry, tubeMaterial);
+             tubeMesh2.position.set(worldX + tubeOffset, worldY - tubeRadius * 2, worldZ);
+             if (roomWidth >= roomDepth) { tubeMesh2.rotation.y = Math.PI / 2; }
+             scene.add(tubeMesh2);
+
+             return pointLight;
+         }
+         // ... (Existing lighting placement loop - unchanged) ...
+          rooms.forEach((room, index) => {
+              const ceilingY_Abs = room.y + room.h - 1; // Top voxel layer index
+              const lightY_World = (ceilingY_Abs * voxelSize) - voxelSize * 0.5; // Position light slightly below ceiling voxel center
+              const lightX_World = getWorldCoordBaseFromIndex(room.cx) + voxelSize / 2; // Center X
+              const lightZ_World = getWorldCoordBaseFromIndex(room.cz) + voxelSize / 2; // Center Z
+              addCeilingLightFixture(lightX_World, lightY_World, lightZ_World, room.w, room.d);
+          });
+          console.log("Ceiling lighting added.");
+
+
+        // --- Game Loop ---
+        const clock = new THREE.Clock();
+        let previousPos = new THREE.Vector3();
+        // ... (Existing collision check points - unchanged) ...
+        const collisionCheckPoints = [ new THREE.Vector3(0, -playerBaseOffset, 0), new THREE.Vector3(playerRadius * 0.7, -playerBaseOffset, 0), new THREE.Vector3(-playerRadius * 0.7, -playerBaseOffset, 0), new THREE.Vector3(0, -playerBaseOffset, playerRadius * 0.7), new THREE.Vector3(0, -playerBaseOffset, -playerRadius * 0.7), new THREE.Vector3(playerRadius * 0.5, -playerBaseOffset, playerRadius * 0.5), new THREE.Vector3(-playerRadius * 0.5, -playerBaseOffset, playerRadius * 0.5), new THREE.Vector3(playerRadius * 0.5, -playerBaseOffset, -playerRadius * 0.5), new THREE.Vector3(-playerRadius * 0.5, -playerBaseOffset, -playerRadius * 0.5) ];
+        const collisionCheckPointsHorizontal = [ new THREE.Vector3(playerRadius, 0, 0), new THREE.Vector3(-playerRadius, 0, 0), new THREE.Vector3(0, 0, playerRadius), new THREE.Vector3(0, 0, -playerRadius), new THREE.Vector3(playerRadius, -playerBaseOffset * 0.8, 0), new THREE.Vector3(-playerRadius, -playerBaseOffset * 0.8, 0), new THREE.Vector3(0, -playerBaseOffset * 0.8, playerRadius), new THREE.Vector3(0, -playerBaseOffset * 0.8, -playerRadius), new THREE.Vector3(playerRadius, playerHeadOffset * 0.8, 0), new THREE.Vector3(-playerRadius, playerHeadOffset * 0.8, 0), new THREE.Vector3(0, playerHeadOffset * 0.8, playerRadius), new THREE.Vector3(0, playerHeadOffset * 0.8, -playerRadius) ];
+        const collisionCheckPointsCeiling = [ new THREE.Vector3(0, playerHeadOffset, 0), new THREE.Vector3(playerRadius * 0.5, playerHeadOffset, 0), new THREE.Vector3(-playerRadius * 0.5, playerHeadOffset, 0), new THREE.Vector3(0, playerHeadOffset, playerRadius * 0.5), new THREE.Vector3(0, playerHeadOffset, -playerRadius * 0.5) ];
+
+        function checkCollision(checkPosition) {
+             // ... (Existing checkCollision function - unchanged) ...
+             const gx = getCellIndex(checkPosition.x);
+             const gy = Math.floor(checkPosition.y / voxelSize); // Use floor for grid index
+             const gz = getCellIndex(checkPosition.z);
+             if (gy < 0 || gy >= gridSizeY) return false; // Check grid bounds
+             const baseWorldX = getWorldCoordBaseFromIndex(gx);
+             const baseWorldY = gy * voxelSize; // Base Y of the voxel cell
+             const baseWorldZ = getWorldCoordBaseFromIndex(gz);
+             const key = `${baseWorldX.toFixed(2)},${baseWorldY.toFixed(2)},${baseWorldZ.toFixed(2)}`;
+             return grid[key] !== undefined; // Check if a voxel exists at this grid coordinate
+         }
+
+        const tempCheckPos = new THREE.Vector3();
+        const playerMoveDirection = new THREE.Vector3();
+        const forwardVector = new THREE.Vector3();
+        const rightVector = new THREE.Vector3();
+        const worldMoveDelta = new THREE.Vector3();
+
+        function animate() {
+            try {
+                requestAnimationFrame(animate);
+                const delta = Math.min(clock.getDelta(), 0.05); // Cap delta time
+                const time = performance.now();
+                const playerPos = controls.getObject().position; // Get player position reference
+
+
+                if (controls.isLocked === true) {
+                    // --- Player Movement & Physics ---
+                    // ... (Existing Player Movement, Physics, Collision logic - unchanged) ...
+                    previousPos.copy(playerPos); // Store position before movement
+
+                    playerMoveDirection.set( (moveLeft ? 1 : 0) - (moveRight ? 1 : 0), 0, (moveForward ? 1 : 0) - (moveBackward ? 1 : 0) ).normalize();
+
+                    camera.getWorldDirection(forwardVector); forwardVector.y = 0; forwardVector.normalize();
+                    rightVector.crossVectors(camera.up, forwardVector).normalize();
+
+                    worldMoveDelta.set(0, 0, 0);
+                    worldMoveDelta.addScaledVector(forwardVector, playerMoveDirection.z);
+                    worldMoveDelta.addScaledVector(rightVector, playerMoveDirection.x);
+                    worldMoveDelta.normalize();
+
+                    const currentSpeed = speed * (noClipEnabled ? noClipSpeedFactor : 1.0);
+                    const moveAmount = currentSpeed * 20.0 * delta;
+
+                    if (noClipEnabled) {
+                        velocity.set(0, 0, 0);
+                        playerPos.addScaledVector(worldMoveDelta, moveAmount);
+                        const verticalMove = (moveUp ? 1 : 0) - (moveDown ? 1 : 0);
+                        playerPos.y += verticalMove * moveAmount;
+                    } else {
+                        velocity.y -= gravity * delta;
+                        velocity.x *= (1 - 8.0 * delta);
+                        velocity.z *= (1 - 8.0 * delta);
+                        velocity.x += worldMoveDelta.x * moveAmount;
+                        velocity.z += worldMoveDelta.z * moveAmount;
+
+                        const steps = 3; const subDelta = delta / steps;
+                        canJump = false;
+
+                        for (let i = 0; i < steps; i++) {
+                            const potentialDelta = velocity.clone().multiplyScalar(subDelta);
+                            // Ground Collision
+                            let groundCollision = false; let highestGroundY = -Infinity;
+                            if (velocity.y <= 0) {
+                                for (const offset of collisionCheckPoints) {
+                                    tempCheckPos.copy(playerPos).add(offset); tempCheckPos.y += potentialDelta.y;
+                                    if (checkCollision(tempCheckPos)) {
+                                        const gy_abs_check = Math.floor(tempCheckPos.y / voxelSize);
+                                        const groundSurfaceY = gy_abs_check * voxelSize + voxelSize;
+                                        highestGroundY = Math.max(highestGroundY, groundSurfaceY); groundCollision = true;
+                                    }
+                                }
+                            }
+                            if (groundCollision) {
+                                const targetPlayerY = highestGroundY + playerBaseOffset;
+                                if (playerPos.y + potentialDelta.y <= targetPlayerY + 0.01) {
+                                    potentialDelta.y = targetPlayerY - playerPos.y;
+                                    velocity.y = 0; canJump = true;
+                                }
+                            }
+                            // Ceiling Collision
+                            let ceilingCollision = false;
+                            if (velocity.y > 0) {
+                                for (const offset of collisionCheckPointsCeiling) {
+                                    tempCheckPos.copy(playerPos).add(offset); tempCheckPos.y += potentialDelta.y;
+                                    if (checkCollision(tempCheckPos)) {
+                                        const gy_abs_check = Math.floor(tempCheckPos.y / voxelSize);
+                                        const ceilingSurfaceY = gy_abs_check * voxelSize;
+                                        const targetPlayerY = ceilingSurfaceY - playerHeadOffset;
+                                        potentialDelta.y = targetPlayerY - playerPos.y - 0.001;
+                                        velocity.y = 0; ceilingCollision = true; break;
+                                    }
+                                }
+                            }
+                            playerPos.y += potentialDelta.y;
+                            // Horizontal (X) Collision
+                            let collisionX = false;
+                            if (Math.abs(velocity.x) > 0.001) {
+                                const deltaX = potentialDelta.x;
+                                for (const offset of collisionCheckPointsHorizontal) {
+                                    tempCheckPos.copy(playerPos).add(offset); tempCheckPos.x += deltaX;
+                                    if (checkCollision(tempCheckPos)) {
+                                        const gx_check = getCellIndex(tempCheckPos.x); const baseWallX = getWorldCoordBaseFromIndex(gx_check);
+                                        if (velocity.x > 0) { potentialDelta.x = (baseWallX - playerRadius) - playerPos.x - 0.001; }
+                                        else { potentialDelta.x = (baseWallX + voxelSize + playerRadius) - playerPos.x + 0.001; }
+                                        velocity.x = 0; collisionX = true; break;
+                                    }
+                                }
+                            }
+                            playerPos.x += potentialDelta.x;
+                            // Horizontal (Z) Collision
+                            let collisionZ = false;
+                            if (Math.abs(velocity.z) > 0.001) {
+                                const deltaZ = potentialDelta.z;
+                                for (const offset of collisionCheckPointsHorizontal) {
+                                    tempCheckPos.copy(playerPos).add(offset); tempCheckPos.z += deltaZ;
+                                    if (checkCollision(tempCheckPos)) {
+                                        const gz_check = getCellIndex(tempCheckPos.z); const baseWallZ = getWorldCoordBaseFromIndex(gz_check);
+                                        if (velocity.z > 0) { potentialDelta.z = (baseWallZ - playerRadius) - playerPos.z - 0.001; }
+                                        else { potentialDelta.z = (baseWallZ + voxelSize + playerRadius) - playerPos.z + 0.001; }
+                                        velocity.z = 0; collisionZ = true; break;
+                                    }
+                                }
+                            }
+                            playerPos.z += potentialDelta.z;
+                        } // End sub-stepping loop
+                    } // End standard movement block
+
+                    // --- Player Health Update on Collision (Example) ---
+                    // Check collision between player and enemies *after* player movement
+                    const playerBox = new THREE.Box3( // Approximate player bounding box
+                        new THREE.Vector3(playerPos.x - playerRadius, playerPos.y - playerBaseOffset, playerPos.z - playerRadius),
+                        new THREE.Vector3(playerPos.x + playerRadius, playerPos.y + playerHeadOffset, playerPos.z + playerRadius)
+                    );
+
+                    enemies.forEach(enemyData => {
+                        if (enemyData.boundingBox.intersectsBox(playerBox)) {
+                            // Player takes damage
+                            // console.log(`Player collided with ${enemyData.type}!`);
+                            playerHealth -= 15 * delta; // Example: Lose 15 health per second of contact
+                            updateHUD();
+                            if (playerHealth <= 0 && controls.isLocked) {
+                                // Game Over Logic
+                                console.log("GAME OVER");
+                                currentObjective = "GAME OVER - You died!";
+                                updateHUD();
+                                // Unlock controls and show blocker/message
+                                controls.unlock();
+                                blocker.style.display = 'flex';
+                                instructions.innerHTML = `<p style="color:red;">GAME OVER</p><p>You were overwhelmed!</p><p>(Refresh page to restart)</p>`;
+                                instructions.style.display = 'block';
+                                loadingText.style.display = 'none';
+                                playText.style.display = 'none';
+                            }
+                        }
+                    });
+
+
+                    // --- Safety Checks ---
+                    // ... (Existing safety checks - unchanged) ...
+                    if (isNaN(playerPos.x) || isNaN(playerPos.y) || isNaN(playerPos.z)) {
+                        console.error("Player position became NaN!", playerPos, "Reverting to previous frame's position.");
+                        playerPos.copy(previousPos); velocity.set(0, 0, 0);
+                    }
+                    if (!noClipEnabled && playerPos.y < -10 * voxelSize) {
+                        console.warn("Player fell through world, teleporting back to start...");
+                        velocity.set(0, 0, 0); playerPos.copy(spawnWorldCoords); camera.position.copy(playerPos);
+                        console.log("Player teleported to:", playerPos);
+                        playerHealth = maxHealth; // Reset health on falling out
+                        updateHUD();
+                    }
+                } // End if (controls.isLocked)
+
+                // --- Projectile Updates & Collision ---
+                // ... (Existing Projectile logic - unchanged) ...
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    const proj = projectiles[i];
+                    const projSphere = proj.userData.boundingBox;
+                    const projVel = proj.userData.velocity;
+                    const projType = proj.userData.type;
+
+                    projSphere.center.addScaledVector(projVel, delta);
+                    proj.position.copy(projSphere.center);
+                    if (projType === 'rocket') { proj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), projVel.clone().normalize()); }
+
+                    let projRemoved = false;
+                    const lifetime = projType === 'rocket' ? rocketLifetime : bulletLifetime;
+                    if (time - proj.userData.spawnTime > lifetime * 1000) { scene.remove(proj); projectiles.splice(i, 1); continue; }
+
+                    // Enemy Collision
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const entityData = enemies[j];
+                        entityData.boundingBox.setFromObject(entityData.mesh); // Update enemy box
+                        if (projSphere.intersectsBox(entityData.boundingBox)) {
+                            scene.remove(proj); projectiles.splice(i, 1); projRemoved = true;
+                            entityData.health -= (projType === 'rocket' ? 100 : 25); // Rockets do more damage
+
+                            // Hit flash effect
+                            const hitMeshes = [];
+                            entityData.mesh.traverse((child) => { if (child.isMesh && child.material) { const originalColor = child.material.color ? child.material.color.clone() : null; hitMeshes.push({ mesh: child, originalColor: originalColor }); if (child.material.color) child.material.color.set(0xffffff); } });
+                            setTimeout(() => { hitMeshes.forEach(hit => { if (hit.mesh?.parent && hit.mesh.material && hit.originalColor && hit.mesh.material.color) { hit.mesh.material.color.copy(hit.originalColor); } }); }, 100);
+
+                            if (entityData.health <= 0) {
+                                console.log(`${entityData.type} Defeated!`);
+                                scene.remove(entityData.mesh); enemies.splice(j, 1);
+                            }
+                            break; // Projectile hits one entity
+                        }
+                    }
+                    if (projRemoved) continue;
+
+                    // World Collision
+                    const projPos = projSphere.center;
+                    const gx = getCellIndex(projPos.x); const gy_abs = Math.floor(projPos.y / voxelSize); const gz = getCellIndex(projPos.z);
+                    if (gy_abs < 0 || gy_abs >= gridSizeY) { scene.remove(proj); projectiles.splice(i, 1); continue; }
+                    const baseWorldX = getWorldCoordBaseFromIndex(gx); const baseWorldY = gy_abs * voxelSize; const baseWorldZ = getWorldCoordBaseFromIndex(gz);
+                    const key = `${baseWorldX.toFixed(2)},${baseWorldY.toFixed(2)},${baseWorldZ.toFixed(2)}`;
+                    if (grid[key] !== undefined) {
+                        const voxelBox = getVoxelBox(baseWorldX, baseWorldY, baseWorldZ);
+                        if (projSphere.intersectsBox(voxelBox)) {
+                            scene.remove(proj); projectiles.splice(i, 1); projRemoved = true;
+                            if (projType === 'rocket') {
+                                const explosionRadius = 1;
+                                shatterVoxel(baseWorldX, baseWorldY, baseWorldZ); // Shatter center
+                                for (let ex = -explosionRadius; ex <= explosionRadius; ex++) { for (let ey = -explosionRadius; ey <= explosionRadius; ey++) { for (let ez = -explosionRadius; ez <= explosionRadius; ez++) { if (ex === 0 && ey === 0 && ez === 0) continue; const cGx = gx + ex; const cGyA = gy_abs + ey; const cGz = gz + ez; if (cGyA < 0 || cGyA >= gridSizeY) continue; const eBX = getWorldCoordBaseFromIndex(cGx); const eBY = cGyA * voxelSize; const eBZ = getWorldCoordBaseFromIndex(cGz); removeVoxel(eBX, eBY, eBZ); } } }
+                            } else { shatterVoxel(baseWorldX, baseWorldY, baseWorldZ); } // Bullet shatters one
+                            continue;
+                        }
+                    }
+                } // End projectile loop
+
+                // --- Debris Update ---
+                // ... (Existing Debris update logic - unchanged) ...
+                for (let i = debris.length - 1; i >= 0; i--) {
+                    const piece = debris[i]; const data = piece.userData;
+                    if (time - data.spawnTime > data.lifetime * 1000) { scene.remove(piece); debris.splice(i, 1); continue; }
+                    data.velocity.y -= gravity * debrisGravityFactor * delta;
+                    data.velocity.multiplyScalar(1 - debrisDampingFactor * delta);
+                    piece.position.addScaledVector(data.velocity, delta);
+                }
+
+
+                // --- Enemy AI update ---
+                // ... (Existing Enemy AI logic - unchanged, but check player collision *after* player moves) ...
+                 const enemySpeedBase = 1.5; const sightRangeSq = 15 * 15;
+                 // Player position is already available in `playerPos`
+
+                 enemies.forEach(enemyData => {
+                     const enemyMesh = enemyData.mesh;
+                     const enemyPos = enemyMesh.position;
+                     enemyData.boundingBox.setFromObject(enemyMesh); // Update bounding box
+
+                     const distToPlayerSq = enemyPos.distanceToSquared(playerPos);
+
+                     if (distToPlayerSq < sightRangeSq) {
+                         const moveDirection = playerPos.clone().sub(enemyPos);
+                         moveDirection.y = 0; moveDirection.normalize();
+                         let currentSpeed = enemySpeedBase;
+                         if (enemyData.type === 'facehugger') currentSpeed *= 1.5;
+                         const enemyDelta = moveDirection.clone().multiplyScalar(currentSpeed * delta);
+                         const nextEnemyPos = enemyPos.clone().add(enemyDelta);
+                         const nextBoundingBox = new THREE.Box3().copy(enemyData.boundingBox).translate(enemyDelta);
+
+                         let canMove = true;
+                         const minGridX = getCellIndex(nextBoundingBox.min.x); const maxGridX = getCellIndex(nextBoundingBox.max.x);
+                         const minGridY = Math.floor(nextBoundingBox.min.y / voxelSize); const maxGridY = Math.floor(nextBoundingBox.max.y / voxelSize);
+                         const minGridZ = getCellIndex(nextBoundingBox.min.z); const maxGridZ = getCellIndex(nextBoundingBox.max.z);
+
+                         voxelCheckLoop:
+                         for (let gx = minGridX; gx <= maxGridX; gx++) { for (let gy = minGridY; gy <= maxGridY; gy++) { for (let gz = minGridZ; gz <= maxGridZ; gz++) {
+                             if (gy < 0 || gy >= gridSizeY) { continue; }
+                             const bwx = getWorldCoordBaseFromIndex(gx); const bwy = gy * voxelSize; const bwz = getWorldCoordBaseFromIndex(gz);
+                             const key = `${bwx.toFixed(2)},${bwy.toFixed(2)},${bwz.toFixed(2)}`;
+                             if (grid[key] !== undefined) {
+                                 const voxelBox = getVoxelBox(bwx, bwy, bwz);
+                                 if (nextBoundingBox.intersectsBox(voxelBox)) { canMove = false; break voxelCheckLoop; }
+                             }
+                         }}} // End voxelCheckLoop
+
+                         if (canMove) { enemyPos.copy(nextEnemyPos); }
+                         enemyMesh.lookAt(playerPos.x, enemyPos.y, playerPos.z);
+                     }
+                     // Enemy-Player Collision is now handled after player movement loop
+                 }); // End enemy loop
+
+
+                // +++ NEW: Pickup Update and Collision Check +++
+                const bobOffset = Math.sin(time * 0.001 * pickupBobSpeed) * pickupBobHeight;
+                for (let i = pickups.length - 1; i >= 0; i--) {
+                    const pickup = pickups[i];
+                    const pickupMesh = pickup.mesh;
+
+                    // Rotation and Bobbing effect
+                    pickupMesh.rotation.y += pickupRotationSpeed * delta;
+                    pickupMesh.position.y = pickup.initialY + bobOffset;
+                    pickup.boundingSphere.center.copy(pickupMesh.position); // Update collision sphere position
+
+                    // Check distance squared for efficiency
+                    if (controls.isLocked && playerPos.distanceToSquared(pickupMesh.position) < pickupCheckRadiusSq) {
+                        // Player has picked up the item
+                        console.log(`Picked up ${pickup.type}`);
+
+                        switch (pickup.type) {
+                            case 'health':
+                                playerHealth = Math.min(playerHealth + pickup.value, maxHealth);
+                                break;
+                            case 'acid':
+                                ammo = Math.min(ammo + pickup.value, maxAmmo);
+                                break;
+                            case 'rocket':
+                                rocketAmmo = Math.min(rocketAmmo + pickup.value, maxRocketAmmo);
+                                break;
+                        }
+
+                        updateHUD(); // Update display
+                        scene.remove(pickupMesh); // Remove visual mesh
+                        pickups.splice(i, 1); // Remove from check array
+                    }
+                }
+
+                // +++ NEW: Objective Proximity Check +++
+                if (objectiveTargetMesh && !objectiveReached && controls.isLocked) {
+                    const distanceToObjective = playerPos.distanceTo(objectiveTargetMesh.position);
+
+                    if (distanceToObjective < objectiveReachDistance) {
+                        console.log("Objective Reached!");
+                        objectiveReached = true; // Set flag
+                        currentObjective = "Objective Complete!"; // Update text
+                        updateHUD();
+
+                        // Optional: Make target react
+                        // scene.remove(objectiveTargetMesh);
+                        // objectiveTargetMesh = null;
+
+                        // Optional: Unlock controls and show victory message
+                        /*
+                        controls.unlock();
+                        blocker.style.display = 'flex';
+                        instructions.innerHTML = `<p style="color:lime;">OBJECTIVE COMPLETE!</p><p>You found the target!</p><p>(Refresh page to restart)</p>`;
+                        instructions.style.display = 'block';
+                        loadingText.style.display = 'none';
+                        playText.style.display = 'none';
+                        */
+                    }
+                }
+
+
+                // --- Lighting Update (Flickering) ---
+                // ... (Existing Lighting update logic - unchanged) ...
+                fluorescentLights.forEach(light => {
+                    if (Math.random() < 0.05) { light.intensity = Math.random() * 0.5 + 0.2; }
+                    else if (Math.random() < 0.1) { light.intensity = 1.0 + Math.random() * 0.5; }
+                    else if (light.intensity < 1.0) { light.intensity += (1.0 - light.intensity) * delta * 2; }
+                    else if (light.intensity > 1.5) { light.intensity -= (light.intensity - 1.5) * delta * 5; }
+                });
+
+                // --- Render ---
+                // godRaysFakeSun.uniforms[ 'sunPositionScreenSpace' ].value.copy( godRaysFakeSun.uniforms[ 'sunPositionWorldSpace' ].value ).project( camera );
+                // godRaysFakeSun.needsSwap = false;
+                // godRaysPass.needsSwap = false;
+                // additiveBlendPass.needsSwap = true;
+
+                composer.render(delta); // Render using EffectComposer
+
+            } catch (error) {
+                console.error("Error in animate loop:", error);
+                blocker.style.display = 'flex';
+                instructions.innerHTML = `<p style="color:red;">RUNTIME ERROR!</p><p>Check console (F12) for details.</p><p>${error.message}</p><p>Attempting to reload might help.</p>`;
+                instructions.style.display = 'block';
+                loadingText.style.display = 'none';
+                playText.style.display = 'none';
+                if(controls.isLocked) controls.unlock();
+                // return; // Optionally stop the loop on error
+            }
+        } // End animate function
+
+        // --- Helper Functions ---
+        const tempVoxelBox = new THREE.Box3();
+        function getVoxelBox(baseWorldX, baseWorldY, baseWorldZ) {
+            tempVoxelBox.min.set(baseWorldX, baseWorldY, baseWorldZ);
+            tempVoxelBox.max.set(baseWorldX + voxelSize, baseWorldY + voxelSize, baseWorldZ + voxelSize);
+            return tempVoxelBox;
+        }
+
+        // --- Resize Listener ---
+        function onWindowResize() {
+            const width = window.innerWidth; const height = window.innerHeight;
+            camera.aspect = width / height; camera.updateProjectionMatrix();
+            renderer.setSize(width, height); composer.setSize(width, height);
+        }
+        window.addEventListener('resize', onWindowResize);
+        onWindowResize(); // Initial size setup
+
+        // --- Initialization Function ---
+        // +++ UPDATED: initGame Function +++
+        async function initGame() {
+             console.log("Preloading models...");
+             await preloadModels(); // Wait for models to load
+
+             // Models loaded, update UI state flag
+             modelsLoaded = true; // Set flag *after* preload finishes
+             loadingText.style.display = 'none';
+             playText.style.display = 'block'; // Show play text now
+
+             // --- Spawn Pickups ---
+             const numHealthPacks = 5;
+             const numAcidPacks = 8;
+             const numRocketPacks = 4;
+             spawnPickups(numHealthPacks, numAcidPacks, numRocketPacks);
+
+             // --- Spawn Objective Target ---
+             if (rooms.length > 1) {
+                 const targetRoomIndex = rooms.length - 1; // Spawn in the last room
+                 console.log(`Attempting to spawn objective in room index ${targetRoomIndex}`);
+                  // Use spawnEntity, marking it as the objective
+                 spawnEntity(targetRoomIndex, objectiveTargetType, true);
+                 if (!objectiveTargetMesh) {
+                      console.error("!!! FAILED TO SPAWN OBJECTIVE TARGET !!! Objective features disabled.");
+                      currentObjective = "ERROR: Target Not Found";
+                 } else {
+                      currentObjective = `Find and Approach ${objectiveTargetType}`; // Set initial text
+                 }
+             } else {
+                  console.warn("Not enough rooms to spawn objective target.");
+                  currentObjective = "Explore the Area"; // Fallback objective text
+             }
+
+             // --- Update HUD ---
+             updateHUD(); // Update HUD with initial ammo, health and objective
+
+             // Make instructions clickable to start game
+             instructions.addEventListener('click', () => {
+                 if (modelsLoaded) { // Only lock if models are ready
+                     controls.lock();
+                 } else {
+                     console.warn("Attempted to start game before models finished loading.");
+                 }
+             });
+             controls.addEventListener('lock', () => { instructions.style.display = 'none'; blocker.style.display = 'none'; });
+             controls.addEventListener('unlock', () => { blocker.style.display = 'flex'; instructions.style.display = 'block'; });
+
+             // Spawn regular enemies *after* models are loaded and objective attempted
+             console.log("Spawning enemies...");
+             // Example spawning - adjust as needed
+             if (rooms.length > 1) spawnEntity(1, 'alien', false); else console.warn("Not enough rooms to spawn alien 1");
+             if (rooms.length > 2) spawnEntity(2, 'alien', false); else console.warn("Not enough rooms to spawn alien 2");
+             if (rooms.length > 3) spawnEntity(3, 'facehugger', false); else console.warn("Not enough rooms to spawn facehugger 1");
+             if (rooms.length > 6) spawnEntity(6, 'alien', false); else console.warn("Not enough rooms to spawn alien 3");
+
+             console.log("Finished spawning enemies.");
+
+             // Start the animation loop
+             console.log("Starting animation loop...");
+             animate();
+        }
+
+        let modelsLoaded = false; // Flag to track loading status
+
+        // --- Start Game Initialization ---
+        initGame().then(() => {
+             // modelsLoaded is set inside initGame after await now
+             console.log("Game initialization sequence completed.");
+        }).catch(error => {
+             console.error("Failed to initialize game:", error);
+             blocker.style.display = 'flex';
+             instructions.innerHTML = `<p style="color:red;">INITIALIZATION FAILED!</p><p>Could not load critical assets or run setup.</p><p>Check console (F12) for details.</p><p>${error.message}</p>`;
+             instructions.style.display = 'block';
+             loadingText.style.display = 'none';
+             playText.style.display = 'none';
+        });
+    </script>
+
+</body>
+</html>

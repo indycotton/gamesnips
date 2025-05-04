@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Animated Forest Path - Dark Blend</title> <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000; } /* Black background */
+    canvas { display: block; }
+    #instructions {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 12px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      font-size: 14px;
+      z-index: 10;
+      max-width: 300px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    #stats {
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="instructions">
+    <strong>Welcome to the Forest Path!</strong><br>
+    Click this panel or anywhere to enter the scene.<br>
+    Use <b>W, A, S, D</b> to move.<br>
+    Move your <b>mouse</b> to look around.<br>
+    Press <b>ESC</b> to exit pointer lock.
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+    import Stats from 'three/addons/libs/stats.module.js'; // Corrected import path
+
+    let scene, camera, renderer, controls, stats;
+    const voxelSize = 1;
+    const forestDepth = 150, forestWidth = 60;
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const keys = {}; // Use an object for key states
+
+    const animatedLeaves = [];
+    const clock = new THREE.Clock();
+
+    init();
+    animate();
+
+    // --- init Function (MODIFIED FOR BLACK BACKGROUND) ---
+    function init() {
+        scene = new THREE.Scene();
+        // --- CHANGE 1: Set background to black to match body ---
+        scene.background = new THREE.Color(0x000000); // Black background
+
+        // --- CHANGE 2: Adjust fog color ---
+        // Changed fog color to black and adjusted distances for the dark environment
+        scene.fog = new THREE.Fog(0x000000, 15, 100);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.8, 8);
+        camera.lookAt(0, camera.position.y, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        stats = new Stats();
+        stats.showPanel(0);
+        stats.dom.style.position = 'absolute';
+        stats.dom.style.top = '0px';
+        stats.dom.style.left = '0px';
+        document.body.appendChild(stats.dom);
+
+        // --- CHANGE 3: Adjust HemisphereLight ---
+        // Changed skyColor to a dark grey for the black background
+        // Adjusted intensity slightly, might need further tweaking
+        const hemiLight = new THREE.HemisphereLight(0x222222, 0x443322, 0.7); // Darker sky light
+        scene.add(hemiLight);
+
+        // Directional light might need adjusting too depending on desired mood
+        const dirLight = new THREE.DirectionalLight(0xffccaa, 0.6); // Slightly reduced intensity
+        dirLight.position.set(15, 30, 20);
+        scene.add(dirLight);
+        // Ambient light might be less necessary with hemiLight adjustments
+        // scene.add(new THREE.AmbientLight(0x776655, 0.1));
+
+
+        // --- Pointer Lock Controls Setup (remains the same) ---
+        controls = new PointerLockControls(camera, document.body);
+        const instructions = document.getElementById('instructions');
+        instructions.addEventListener('click', () => { controls.lock(); });
+        document.body.addEventListener('click', (event) => {
+            if (event.target !== instructions && !instructions.contains(event.target)) {
+                controls.lock();
+            }
+        });
+        controls.addEventListener('lock', function () { instructions.style.display = 'none'; });
+        controls.addEventListener('unlock', function () { instructions.style.display = 'block'; });
+        scene.add(controls.getObject());
+        // --- End Pointer Lock Controls Setup ---
+
+
+        // --- Keyboard Input Listeners (remains the same) ---
+        document.addEventListener('keydown', (event) => {
+            keys[event.code] = true;
+            if (event.code === 'Escape') {
+                if(controls.isLocked) { controls.unlock(); }
+            }
+        });
+        document.addEventListener('keyup', (event) => { keys[event.code] = false; });
+        // --- End Keyboard Input Listeners ---
+
+
+        // Color palettes (remain the same)
+        const undergrowthColors = [0xda4f2c, 0xaa7c3f, 0x5a7f3b, 0x3a5f7d, 0x7d4a2f, 0xc2b74d];
+        const pathColors = [0xc4b49a, 0xa09078, 0x8b7d6c, 0xb0a08c, 0x958574, 0x7a6f61];
+        const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+
+
+        // --- Create Ground and Trees (remains the same logic) ---
+        const pathWidth = 7;
+        const halfForestWidth = forestWidth / 2;
+        for (let z = 0; z < forestDepth; z++) {
+            for (let x = -halfForestWidth; x < halfForestWidth; x++) {
+                let color;
+                if (x >= -Math.floor(pathWidth / 2) && x <= Math.floor(pathWidth / 2)) {
+                    color = pathColors[Math.floor(Math.random() * pathColors.length)];
+                } else {
+                    color = undergrowthColors[Math.floor(Math.random() * undergrowthColors.length)];
+                }
+                const material = new THREE.MeshLambertMaterial({ color: color });
+                const cube = new THREE.Mesh(geometry, material);
+                const groundY = -voxelSize * 0.5;
+                cube.position.set(x * voxelSize, groundY, -z * voxelSize);
+                scene.add(cube);
+
+                const pathEdgeBuffer = 1;
+                const isOffPath = x < -Math.floor(pathWidth / 2) - pathEdgeBuffer || x > Math.floor(pathWidth / 2) + pathEdgeBuffer;
+                if (isOffPath && Math.random() < 0.08) {
+                    createTree(x * voxelSize, groundY + voxelSize * 0.5, -z * voxelSize);
+                }
+            }
+        }
+        // --- End Create Ground and Trees ---
+
+
+        // --- Window Resize Listener (remains the same) ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+        });
+        // --- End Window Resize Listener ---
+
+        console.log("--- Scene Initialized (Dark Background) ---");
+        console.log("Total objects in scene:", scene.children.length);
+        console.log("Controls Object Added:", scene.children.includes(controls.getObject()));
+        console.log("-----------------------");
+    }
+    // --- End init Function ---
+
+
+    // --- createTree Function (Adjusted Base Y - remains the same) ---
+    function createTree(baseX, baseY, baseZ) {
+      const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x5e3c1c });
+      const leafColors = [
+        0x3b6e2b, 0x72a12d, 0xc9d85a,
+        0xe8a43c, 0xaa7c3f, 0xda4f2c,
+        0x447744, 0x77aa44, 0x2a5a1a
+      ];
+      const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+      const minTrunkHeight = 8;
+      const maxTrunkVariation = 6;
+      const trunkHeight = minTrunkHeight + Math.floor(Math.random() * (maxTrunkVariation + 1));
+
+      for (let h = 0; h < trunkHeight; h++) {
+        const trunk = new THREE.Mesh(geometry, trunkMaterial);
+        trunk.position.set(baseX, baseY + h * voxelSize, baseZ);
+        scene.add(trunk);
+      }
+
+      const leafSpread = 3;
+      const leafHeight = 5;
+      const topTrunkY = baseY + (trunkHeight -1) * voxelSize;
+      const leafBaseHeight = topTrunkY - voxelSize * 1;
+
+      for (let dy = 0; dy < leafHeight; dy++) {
+        for (let dx = -leafSpread; dx <= leafSpread; dx++) {
+          for (let dz = -leafSpread; dz <= leafSpread; dz++) {
+            const distSq = dx*dx + dz*dz + (dy - leafHeight / 2)*(dy - leafHeight / 2) * 0.6;
+            const probabilityThreshold = 0.15;
+            const densityFactor = 0.07;
+
+            if (Math.random() > distSq * densityFactor + probabilityThreshold) {
+              const leafMaterial = new THREE.MeshLambertMaterial({
+                color: leafColors[Math.floor(Math.random() * leafColors.length)]
+              });
+              const leaf = new THREE.Mesh(geometry, leafMaterial);
+              const currentLeafY = leafBaseHeight + dy * voxelSize;
+              const originalPosition = new THREE.Vector3(
+                baseX + dx * voxelSize,
+                currentLeafY,
+                baseZ + dz * voxelSize
+              );
+              leaf.position.copy(originalPosition);
+              scene.add(leaf);
+              animatedLeaves.push({ mesh: leaf, originalPosition: originalPosition });
+            }
+          }
+        }
+      }
+    }
+    // --- End createTree Function ---
+
+
+    // --- animate Function (Updated Movement - remains the same) ---
+    function animate() {
+      requestAnimationFrame(animate);
+      stats.begin();
+      const delta = clock.getDelta();
+      const elapsedTime = clock.getElapsedTime();
+
+      if (controls.isLocked === true) {
+        const damping = 10.0;
+        velocity.x -= velocity.x * damping * delta;
+        velocity.z -= velocity.z * damping * delta;
+
+        direction.z = Number(keys['KeyW']) - Number(keys['KeyS']);
+        direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
+        direction.normalize();
+
+        const moveSpeed = 50.0;
+        if (keys['KeyW'] || keys['KeyS']) {
+          velocity.z -= direction.z * moveSpeed * delta;
+        }
+        if (keys['KeyA'] || keys['KeyD']) {
+          velocity.x -= direction.x * moveSpeed * delta;
+        }
+
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        // Optional: Keep camera at a fixed height
+        // controls.getObject().position.y = 1.8;
+
+      } else {
+         velocity.x = 0;
+         velocity.z = 0;
+      }
+
+      const swaySpeed = 0.8;
+      const swayAmount = 0.06;
+      animatedLeaves.forEach(animatedLeaf => {
+        const leaf = animatedLeaf.mesh;
+        const originalPosition = animatedLeaf.originalPosition;
+        const offsetX = Math.sin(elapsedTime * swaySpeed + originalPosition.z * 0.4) * swayAmount;
+        const offsetY = Math.sin(elapsedTime * swaySpeed * 0.7 + originalPosition.x * 0.4) * swayAmount * 0.4;
+        const offsetZ = Math.cos(elapsedTime * swaySpeed + originalPosition.x * 0.4) * swayAmount;
+        leaf.position.set(
+          originalPosition.x + offsetX,
+          originalPosition.y + offsetY,
+          originalPosition.z + offsetZ
+        );
+      });
+
+      renderer.render(scene, camera);
+      stats.end();
+    }
+    // --- End animate Function ---
+
+  </script>
+</body>
+</html>

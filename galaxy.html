@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Big Bang Smoke Simulation</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      background: black;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+<canvas id="universe"></canvas>
+
+<script>
+const canvas = document.getElementById('universe');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// Simulation parameters
+const NUM_PARTICLES = 1500;
+const INITIAL_EXPANSION_SPEED = 4.0;
+const SLOWDOWN_RATE = 0.995; // slows down expansion per frame
+const MAX_RADIUS = Math.min(window.innerWidth, window.innerHeight) / 2 - 30;
+
+// Each frame = ~100 million years
+const TOTAL_FRAMES = 165; // 165 * 100 million = 16.5 billion
+let frameCount = 0;
+
+const CENTER_X = () => canvas.width / 2;
+const CENTER_Y = () => canvas.height / 2;
+
+const particles = [];
+
+// Initialize particles
+for (let i = 0; i < NUM_PARTICLES; i++) {
+    let angle = Math.random() * 2 * Math.PI;
+    let radius = Math.random() * 5;
+    particles.push({
+        angle: angle,
+        radius: radius,
+        speed: INITIAL_EXPANSION_SPEED * (0.5 + Math.random()),
+        alpha: 1.0,
+        drift: (Math.random() - 0.5) * 0.2, // slight random drift for smoky look
+    });
+}
+
+function animate() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // trail effect
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let p of particles) {
+        // Expand outward
+        p.radius += p.speed;
+        
+        // Slow down expansion over time
+        p.speed *= SLOWDOWN_RATE;
+
+        // Slight sideways drift
+        p.angle += p.drift * 0.01;
+
+        let x = CENTER_X() + p.radius * Math.cos(p.angle);
+        let y = CENTER_Y() + p.radius * Math.sin(p.angle);
+
+        // Slowly fade particles as the universe gets older
+        p.alpha *= 0.9995;
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+        ctx.arc(x, y, 2, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    frameCount++;
+    if (frameCount < TOTAL_FRAMES * 100) { // extend to 16.5 billion years' worth
+        requestAnimationFrame(animate);
+    } else {
+        console.log("Universe simulation complete: 16.5 billion years simulated.");
+    }
+}
+
+animate();
+</script>
+
+</body>
+</html>

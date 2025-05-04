@@ -51,6 +51,9 @@
     let moveSpeed = 10;
     let rotateSpeed = 0.01;
 
+    // Keep track of active sand particles for faster updates
+    let activeSand = [];
+
     function withinBounds(x, y, z) {
       return x >= 0 && x < cols && y >= 0 && y < numRows && z >= 0 && z < depth;
     }
@@ -72,6 +75,25 @@
 
       rotationX = -PI / 4;
       rotationY = PI / 4;
+
+      // Procedurally generate a surface at the bottom
+      let surfaceHeight = 5;
+      let surfaceVariation = 2;
+      let surfaceColor = 120;
+
+      for (let i = 0; i < cols; i++) {
+        for (let k = 0; k < depth; k++) {
+          let baseHeight = numRows - surfaceHeight;
+          let variation = floor(random(-surfaceVariation, surfaceVariation + 1));
+          let y = baseHeight + variation;
+          y = constrain(y, 0, numRows - 1);
+          for (let j = y; j < numRows; j++) {
+            grid[i][j][k] = surfaceColor;
+          }
+        }
+      }
+
+      // Initialize active sand particles (none at the start with just the surface)
     }
 
     function windowResized() {
@@ -84,6 +106,23 @@
       velB = make3DArray(cols, numRows, depth);
       grid = gridA;
       velocityGrid = velA;
+      activeSand = []; // Clear active sand on resize
+
+      // Regenerate the surface
+      let surfaceHeight = 5;
+      let surfaceVariation = 2;
+      let surfaceColor = 120;
+      for (let i = 0; i < cols; i++) {
+        for (let k = 0; k < depth; k++) {
+          let baseHeight = numRows - surfaceHeight;
+          let variation = floor(random(-surfaceVariation, surfaceVariation + 1));
+          let y = baseHeight + variation;
+          y = constrain(y, 0, numRows - 1);
+          for (let j = y; j < numRows; j++) {
+            grid[i][j][k] = surfaceColor;
+          }
+        }
+      }
     }
 
     function keyPressed() {
@@ -149,9 +188,10 @@
                 let col = mouseCol + i;
                 let row = mouseRow + j;
                 let dep = middleDepth + k;
-                if (withinBounds(col, row, dep)) {
+                if (withinBounds(col, row, dep) && grid[col][row][dep] === 0) {
                   grid[col][row][dep] = hueValue;
                   velocityGrid[col][row][dep] = 1;
+                  activeSand.push({ x: col, y: row, z: dep }); // Add new sand to active list
                 }
               }
             }
@@ -164,11 +204,78 @@
       }
     }
 
+    function updateSand() {
+      let nextGrid = (grid === gridA ? gridB : gridA);
+      let nextVel = (velocityGrid === velA ? velB : velA);
+
+      // Clear next buffer
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < numRows; j++) {
+          for (let k = 0; k < depth; k++) {
+            nextGrid[i][j][k] = grid[i][j][k]; // Copy existing state
+            nextVel[i][j][k] = velocityGrid[i][j][k]; // Copy existing velocity
+          }
+        }
+      }
+
+      let nextActiveSand = [];
+
+      // Iterate only through the active sand particles
+      for (let n = 0; n < activeSand.length; n++) {
+        let sand = activeSand[n];
+        let i = sand.x;
+        let j = sand.y;
+        let k = sand.z;
+        let state = grid[i][j][k];
+        let velocity = velocityGrid[i][j][k];
+
+        if (state > 0) {
+          let nextY = j + 1;
+          let moved = false;
+
+          if (withinBounds(i, nextY, k) && grid[i][nextY][k] === 0) {
+            nextGrid[i][nextY][k] = state;
+            nextGrid[i][j][k] = 0;
+            nextVel[i][nextY][k] = velocity + gravity;
+            nextVel[i][j][k] = 0;
+            nextActiveSand.push({ x: i, y: nextY, z: k });
+            moved = true;
+          } else {
+            let potentialMoves = [];
+            if (withinBounds(i + 1, nextY, k) && grid[i + 1][nextY][k] === 0) potentialMoves.push({ x: i + 1, y: nextY, z: k });
+            if (withinBounds(i - 1, nextY, k) && grid[i - 1][nextY][k] === 0) potentialMoves.push({ x: i - 1, y: nextY, z: k });
+            if (withinBounds(i, nextY, k + 1) && grid[i][nextY][k + 1] === 0) potentialMoves.push({ x: i, y: nextY, z: k + 1 });
+            if (withinBounds(i, nextY, k - 1) && grid[i][nextY][k - 1] === 0) potentialMoves.push({ x: i, y: nextY, z: k - 1 });
+
+            if (potentialMoves.length > 0) {
+              let move = random(potentialMoves);
+              nextGrid[move.x][move.y][move.z] = state;
+              nextGrid[i][j][k] = 0;
+              nextVel[move.x][move.y][move.z] = velocity + gravity;
+              nextVel[i][j][k] = 0;
+              nextActiveSand.push({ x: move.x, y: move.y, z: move.z });
+              moved = true;
+            }
+          }
+
+          if (!moved) {
+            nextActiveSand.push({ x: i, y: j, z: k }); // Still active
+          }
+        }
+      }
+
+      grid = nextGrid;
+      velocityGrid = nextVel;
+      activeSand = nextActiveSand;
+    }
+
     function draw() {
       background(0);
       camera(cameraX, cameraY, cameraZ, 0, 0, 0, 0, 1, 0);
       rotateX(rotationX);
       rotateY(rotationY);
+
+      updateSand(); // Update sand positions
 
       // Draw sand
       for (let i = 0; i < cols; i++) {
@@ -185,60 +292,6 @@
           }
         }
       }
-
-      let nextGrid = (grid === gridA ? gridB : gridA);
-      let nextVel = (velocityGrid === velA ? velB : velA);
-
-      // Clear next buffer
-      for (let i = 0; i < cols; i++) {
-        for (let j = 0; j < numRows; j++) {
-          for (let k = 0; k < depth; k++) {
-            nextGrid[i][j][k] = 0;
-            nextVel[i][j][k] = 0;
-          }
-        }
-      }
-
-      for (let i = 0; i < cols; i++) {
-        for (let j = numRows - 1; j >= 0; j--) {
-          for (let k = 0; k < depth; k++) {
-            let state = grid[i][j][k];
-            let velocity = velocityGrid[i][j][k];
-
-            if (state > 0) {
-              let nextY = j + 1;
-              let moved = false;
-
-              if (withinBounds(i, nextY, k) && grid[i][nextY][k] === 0) {
-                nextGrid[i][nextY][k] = state;
-                nextVel[i][nextY][k] = velocity + gravity;
-                moved = true;
-              } else {
-                let potentialMoves = [];
-                if (withinBounds(i + 1, nextY, k) && grid[i + 1][nextY][k] === 0) potentialMoves.push({ x: i + 1, y: nextY, z: k });
-                if (withinBounds(i - 1, nextY, k) && grid[i - 1][nextY][k] === 0) potentialMoves.push({ x: i - 1, y: nextY, z: k });
-                if (withinBounds(i, nextY, k + 1) && grid[i][nextY][k + 1] === 0) potentialMoves.push({ x: i, y: nextY, z: k + 1 });
-                if (withinBounds(i, nextY, k - 1) && grid[i][nextY][k - 1] === 0) potentialMoves.push({ x: i, y: nextY, z: k - 1 });
-
-                if (potentialMoves.length > 0) {
-                  let move = random(potentialMoves);
-                  nextGrid[move.x][move.y][move.z] = state;
-                  nextVel[move.x][move.y][move.z] = velocity + gravity;
-                  moved = true;
-                }
-              }
-
-              if (!moved) {
-                nextGrid[i][j][k] = state;
-                nextVel[i][j][k] = velocity + gravity;
-              }
-            }
-          }
-        }
-      }
-
-      grid = nextGrid;
-      velocityGrid = nextVel;
     }
   </script>
 </body>

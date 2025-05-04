@@ -2,186 +2,363 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced 2D Fluid Simulation</title>
+    <title>Babylon.js Expanded Grass Field with Player Interaction, Collisions, Fog</title>
     <style>
-        body {
-            margin: 0;
+        html, body {
             overflow: hidden;
-            font-family: Arial, sans-serif;
-            background-color: #000;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #87CEEB; /* Sky Blue fallback */
         }
         canvas {
-            display: block;
-        }
-
-        #menu {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-            font-size: 14px;
-        }
-        #menu label {
-            display: block;
-            margin-bottom: 8px;
-        }
-        #menu input[type="range"], #menu input[type="checkbox"], #menu button {
-            margin-bottom: 10px;
             width: 100%;
-        }
-        #menu button {
-            padding: 8px;
-            border: none;
-            border-radius: 5px;
-            background-color: #007BFF;
-            color: white;
-            cursor: pointer;
-        }
-        #menu button:hover {
-            background-color: #0056b3;
+            height: 100%;
+            display: block;
+            /* touch-action: none; /* Prevent touch scrolling - keep for touch controls */
         }
     </style>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
-    <canvas id="waterCanvas"></canvas>
-
-    <div id="menu">
-        <label for="gravitySlider">Gravity:</label>
-        <input type="range" id="gravitySlider" min="-1" max="1" step="0.01" value="0.1">
-        <span id="gravityValue">Gravity: 0.1</span>
-
-        <label for="numParticlesSlider">Particle Density:</label>
-        <input type="range" id="numParticlesSlider" min="100" max="2000" step="100" value="1000">
-        <span id="numParticlesValue">Particles: 1000</span>
-
-        <label for="shaderToggle">Toggle Shaders (Lighting):</label>
-        <input type="checkbox" id="shaderToggle" checked>
-
-        <button id="resetBtn">Reset Simulation</button>
-    </div>
-
+    <canvas id="renderCanvas"></canvas>
     <script>
-        const canvas = document.getElementById('waterCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        var canvas = document.getElementById("renderCanvas");
 
-        const particles = [];
-        let gravity = 0.1;
-        let numParticles = 1000;
-        const interactionRadius = 50;
-        const interactionRadiusSquared = interactionRadius * interactionRadius;
-        const dragFactor = 0.98;
-        const lightSource = { x: canvas.width * 0.5, y: canvas.height * 0.25 };
+        // --- DEBUGGING: Check if canvas is found ---
+        if (!canvas) {
+            console.error("Error: Canvas element with ID 'renderCanvas' not found!");
+            // You might want to display a message to the user here
+            // alert("Error: Rendering canvas not found!");
+            throw new Error("Canvas element not found"); // Stop execution if canvas is missing
+        }
+        console.log("Canvas element found.");
+        // --- END DEBUGGING ---
 
-        class Particle {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.vx = (Math.random() - 0.5) * 2;
-                this.vy = (Math.random() - 0.5) * 2;
-                this.radius = Math.random() * 3 + 1;
-            }
+        // Engine options: preserveDrawingBuffer and stencil set to false for optimization
+        var engine;
+        try {
+            engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: false });
+            console.log("Babylon.js engine created successfully.");
+        } catch (e) {
+            console.error("Error creating Babylon.js engine:", e);
+            // alert("Error initializing graphics engine!");
+            throw e; // Re-throw the error
+        }
 
-            update() {
-                this.vy += gravity;
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vx *= dragFactor;
-                this.vy *= dragFactor;
 
-                if (this.x + this.radius > canvas.width || this.x - this.radius < 0) {
-                    this.vx *= -1;
-                }
-                if (this.y + this.radius > canvas.height || this.y - this.radius < 0) {
-                    this.vy *= -1;
-                }
+        // ========================================================
+        // createScene FUNCTION
+        // ========================================================
+        var createScene = function () {
+            console.log("Creating scene...");
 
-                for (const other of particles) {
-                    if (other !== this) {
-                        const dx = this.x - other.x;
-                        const dy = this.y - other.y;
-                        const distanceSquared = dx * dx + dy * dy;
+            // Destructuring
+            const {
+                Scene, Mesh, HemisphericLight, Vector3, Matrix, Quaternion, Color3,
+                UniversalCamera, MeshBuilder, StandardMaterial, VertexBuffer, Behavior, AutoRotationBehavior
+            } = BABYLON;
 
-                        if (distanceSquared < interactionRadiusSquared) {
-                            const distance = Math.sqrt(distanceSquared);
-                            const angle = Math.atan2(dy, dx);
-                            const force = (interactionRadius - distance) / interactionRadius * 0.5;
-                            this.vx += Math.cos(angle) * force;
-                            this.vy += Math.sin(angle) * force;
-                        }
+            // Helper function for setting direction using quaternion
+            const tmpVector1 = BABYLON.Vector3.Zero();
+            function setDirectionToRef(normal, quaternion) {
+                quaternion = quaternion || new BABYLON.Quaternion();
+                normal.normalize();
+                if (Math.abs(normal.y) > 0.9999) {
+                    if (normal.y > 0) {
+                         BABYLON.Quaternion.RotationAxisToRef(BABYLON.Vector3.Right(), 0, quaternion);
+                    } else {
+                         BABYLON.Quaternion.RotationAxisToRef(BABYLON.Vector3.Right(), Math.PI, quaternion);
                     }
+                } else {
+                    tmpVector1.set(normal.z, 0, -normal.x).normalize();
+                    const radians = Math.acos(normal.y);
+                    BABYLON.Quaternion.RotationAxisToRef(tmpVector1, radians, quaternion);
                 }
+                return quaternion;
             }
 
-            draw(applyLighting) {
-                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-                let baseColor = 'rgba(0, 100, 255, 0.8)';
-                let highlightColor = 'rgba(100, 200, 255, 0.3)';
+            // Scene setup
+            const scene = new Scene(engine);
+            scene.clearColor = new Color3(135 / 255, 206 / 255, 235 / 255); // Sky Blue
+            console.log("Scene created.");
 
-                if (applyLighting) {
-                    const dx = this.x - lightSource.x;
-                    const dy = this.y - lightSource.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    const normalizedDistance = Math.min(1, distance / Math.sqrt(canvas.width * canvas.width + canvas.height * canvas.height));
-                    const intensity = 1 - normalizedDistance;
+            // --- ADDED: Enable collisions for the scene ---
+            scene.collisionsEnabled = true;
+            console.log("Scene collisions enabled.");
+            // --- END ADDED ---
 
-                    baseColor = `rgba(0, ${100 + intensity * 155}, ${255 - intensity * 155}, 0.8)`;
-                    highlightColor = `rgba(100, ${200 - intensity * 100}, ${255}, 0.3)`;
-                }
+            // --- ADDED: Add Fog ---
+            scene.fogMode = BABYLON.Scene.FOGMODE_EXP; // Or BABYLON.Scene.FOGMODE_LINEAR or BABYLON.Scene.FOGMODE_EXP2
+            scene.fogColor = new Color3(0.8, 0.8, 0.8); // Light gray fog color
+            scene.fogDensity = 0.01; // Adjust density to control how thick the fog is
+            // For FOGMODE_LINEAR, use:
+            // scene.fogStart = 50;
+            // scene.fogEnd = 200;
+            console.log("Fog added to scene.");
+            // --- END ADDED ---
 
-                gradient.addColorStop(0, baseColor);
-                gradient.addColorStop(1, highlightColor);
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.fill();
+
+            // Camera setup
+            // --- MODIFIED: Setup UniversalCamera for player movement and adjusted initial height and far clip ---
+            // Position the camera in the middle of the ground, slightly above it to simulate standing
+            const camera = new UniversalCamera('playerCamera', new Vector3(0, 2, 0), scene); // Adjusted initial Y position
+            camera.speed = 5; // Adjusted movement speed for larger area
+            camera.angularSpeed = 0.05; // Adjust turning speed
+            camera.inertia = 0.8; // Smooth out movement
+            camera.keysUp = [87]; // W
+            camera.keysDown = [83]; // S
+            camera.keysLeft = [65]; // A
+            camera.keysRight = [68]; // D
+            camera.keysUpward = [32]; // Space (for jumping/moving up)
+            camera.keysDownward = [16]; // Shift (for moving down)
+
+            // Attach controls to the canvas
+            camera.attachControl(canvas, true);
+            camera.maxZ = 500; // Increased far clipping plane to see further
+
+            // --- ADDED: Enable gravity and collisions for the camera ---
+            scene.gravity = new Vector3(0, -0.9, 0); // Add gravity
+            camera.applyGravity = true; // Apply gravity to the camera
+            camera.checkCollisions = true; // Enable camera collisions
+            camera.ellipsoid = new Vector3(1, 1.8, 1); // Adjust ellipsoid size for a standing player
+            console.log("Player camera collisions and gravity enabled.");
+            // --- END ADDED ---
+
+
+            // Light setup
+            const baseLight = new HemisphericLight('hemiLight', new Vector3(0, 1, 0), scene);
+            baseLight.intensity = 1.0;
+            baseLight.diffuse = new Color3(1, 1, 1);
+            baseLight.specular = new Color3(0.1, 0.1, 0.1);
+            baseLight.groundColor = new Color3(0.4, 0.3, 0.2);
+            console.log("Light created.");
+
+            // Material setup
+            const mat = new BABYLON.CustomMaterial('grassMat', scene);
+            mat.diffuseColor = new Color3(50 / 255, 180 / 255, 50 / 255); // Base green color
+            mat.specularColor = new Color3(0.05, 0.05, 0.05);
+            console.log("Grass material created.");
+
+            // --- REMOVED: Test box ---
+            // The test box is removed to be replaced by the player camera view.
+            // --- END REMOVED ---
+
+
+            // Base Mesh (Ground) - Invisible and used for positioning instances and collisions
+            // --- MODIFIED: Increased ground size and subdivisions significantly ---
+            const groundSize = 500; // Increased ground size significantly
+            const groundSubdivisions = 500; // Increased subdivisions to maintain density
+            // --- END MODIFIED ---
+            const baseMesh = MeshBuilder.CreateGround(
+                'baseGround',
+                { width: groundSize, height: groundSize, subdivisions: groundSubdivisions, updatable: false },
+                scene
+            );
+            baseMesh.isVisible = false; // Hide the base ground mesh
+            // --- ADDED: Enable collisions for the base ground mesh ---
+            baseMesh.checkCollisions = true;
+            console.log("Base ground mesh created (invisible) with collisions enabled.");
+            // --- END ADDED ---
+
+            // --- ADDED: Visible Ground Mesh with Brown Material ---
+            const visibleGround = MeshBuilder.CreateGround(
+                 'visibleGround',
+                 { width: groundSize, height: groundSize, subdivisions: groundSubdivisions, updatable: false },
+                 scene
+            );
+            const groundMat = new StandardMaterial("groundMat", scene);
+            groundMat.diffuseColor = new Color3(0.6, 0.4, 0.2); // Brown color
+            visibleGround.material = groundMat;
+            console.log("Visible brown ground mesh created.");
+            // --- END ADDED ---
+
+
+            // Blade Mesh - The single mesh that will be instanced
+            const path = [];
+            const maxSegments = 8;
+            for (let i = 0; i < maxSegments; i++) {
+                path.push(new Vector3(0, i / maxSegments, 0));
             }
+            const mesh = MeshBuilder.CreateTube('blade', {
+                path,
+                tessellation: 4,
+                radiusFunction: (i) => { // Tapers the blade towards the top
+                    const r = 1 - (i / maxSegments);
+                    return Math.sin(r * Math.PI / 2) * 0.08; // Sine function for tapering
+                },
+                cap: Mesh.NO_CAP,
+                scene,
+                updatable: false,
+                sideOrientation: Mesh.DEFAULTSIDE,
+            });
+            mesh.material = mat; // Apply the custom material
+            mesh.freezeWorldMatrix(); // Optimize by freezing the base mesh's world matrix
+            mesh.doNotSyncBoundingInfo = true; // Further optimization
+            console.log("Grass blade mesh created.");
+
+
+            // Instances - Create grass blades at each vertex of the base ground mesh
+            const groundPositions = baseMesh.getVerticesData(VertexBuffer.PositionKind);
+            const groundNormals = baseMesh.getVerticesData(VertexBuffer.NormalKind);
+
+            const scaling = new Vector3(1, 1, 1);
+            const rotation = new BABYLON.Quaternion();
+            const resultMatrix = new Matrix();
+
+            const total = groundPositions.length / 3; // Total number of grass instances (equal to number of ground vertices)
+            const bufferMatrices = new Float32Array(16 * total); // Array to hold the transformation matrices for each instance
+            const bufferIdxes = new Float32Array(total); // Array to hold a unique index for each instance
+
+            const transition = new Vector3();
+            const normal = new Vector3();
+            for (let i = 0; i < total; i++) {
+                // Position instance at the ground vertex
+                transition.x = groundPositions[i * 3 + 0];
+                transition.y = groundPositions[i * 3 + 1];
+                transition.z = groundPositions[i * 3 + 2];
+
+                // Random scaling for variation in grass height
+                scaling.y = 3.0 + Math.random() * 2.0;
+
+                // Random rotation for variation in grass direction
+                const rx = (Math.random() - 0.5) * 0.3;
+                const ry = Math.random() * Math.PI * 2;
+                const rz = (Math.random() - 0.5) * 0.3;
+                const randomRot = BABYLON.Quaternion.RotationAlphaBetaGamma(ry, rx, rz);
+
+                // Orient instance based on the ground normal
+                normal.x = groundNormals[i * 3 + 0];
+                normal.y = groundNormals[i * 3 + 1];
+                normal.z = groundNormals[i * 3 + 2];
+                setDirectionToRef(normal, rotation); // Align grass blade with ground normal
+                rotation.multiplyInPlace(randomRot); // Apply additional random rotation
+
+                // Compose the final transformation matrix and store it
+                Matrix.ComposeToRef(scaling, rotation, transition, resultMatrix);
+                resultMatrix.copyToArray(bufferMatrices, 16 * i);
+
+                // Store the instance index
+                bufferIdxes[i] = i;
+            }
+
+            mesh.thinInstanceSetBuffer('matrix', bufferMatrices, 16, true);
+            mesh.thinInstanceSetBuffer('idx', bufferIdxes, 1, true); // Pass the instance index to the shader
+            console.log(`Created ${total} grass instances.`);
+
+
+            // --- Shaders ---
+            mat.AddAttribute('idx'); // Make the 'idx' attribute available in the vertex shader
+
+            // Vertex Shader modifications
+            mat.Vertex_Definitions(`
+                varying float vR; // Passes the vertical position of the vertex (0 at base, 1 at top) to the fragment shader
+                varying float vIdx; // Passes the instance index to the fragment shader
+                attribute float idx; // Receives the instance index from the buffer
+                // Noise functions (hash33, hash11, noise) - Used for generating turbulent motion
+                #define MOD3 vec3(.1031, .11369, .13787)
+                vec3 hash33(vec3 p3) { p3 = fract(p3 * MOD3); p3 += dot(p3, p3.yxz + 19.19); return -1.0 + 2.0 * fract(vec3((p3.x + p3.y) * p3.z, (p3.x + p3.z) * p3.y, (p3.y + p3.z) * p3.x)); }
+                float hash11(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
+                float noise(vec3 p) { const float K1 = 0.333333333; const float K2 = 0.166666667; vec3 i = floor(p + (p.x + p.y + p.z) * K1); vec3 d0 = p - (i - (i.x + i.y + i.z) * K2); vec3 e = step(vec3(0.0), d0 - d0.yzx); vec3 i1 = e * (1.0 - e.zxy); vec3 i2 = 1.0 - e.zxy * (1.0 - e); vec3 d1 = d0 - (i1 - 1.0 * K2); vec3 d2 = d0 - (i2 - 2.0 * K2); vec3 d3 = d0 - (1.0 - 3.0 * K2); vec4 h = max(0.6 - vec4(dot(d0, d0), dot(d1, d1), dot(d2, d2), dot(d3, d3)), 0.0); vec4 n = h * h * h * h * vec4(dot(d0, hash33(i)), dot(d1, hash33(i + i1)), dot(d2, hash33(i + i2)), dot(d3, hash33(i + 1.0))); return dot(vec4(31.316), n); }
+            `);
+
+            // --- Modified Vertex_Before_PositionUpdated ---
+            mat.Vertex_Before_PositionUpdated(`
+                vR = position.y; // Store the y-coordinate (height along the blade)
+                vIdx = idx; // Store the instance index
+
+                float time = iTime * 0.7; // Scale time for animation speed (increased speed)
+                float windStrength = 0.35; // Control the intensity of the wind effect (increased strength)
+                float noiseScale = 0.1; // Scale for the noise function, affects the "size" of wind gusts
+
+                // Get the base position of the instance in world space
+                vec3 instanceBasePos = vec3(world1.x, world1.y, world1.z);
+
+                // Generate noise values based on instance position and time
+                // This creates spatial and temporal variations in wind
+                vec3 noiseInput = instanceBasePos * noiseScale + vec3(time, 0.0, time * 0.7);
+                float windX = noise(noiseInput) * windStrength;
+                float windZ = noise(noiseInput + vec3(10.0, 0.0, 5.0)) * windStrength; // Offset noise input for Z direction
+
+                // Apply wind displacement to the vertex position
+                // Displacement is stronger at the top of the blade (scaled by vR)
+                positionUpdated.x += windX * vR;
+                positionUpdated.z += windZ * vR;
+            `);
+            // --- End Modification ---
+
+            // Fragment Shader modifications
+            mat.Fragment_Definitions(`
+                varying float vR; // Receive vertical position
+                varying float vIdx; // Receive instance index
+                // Hash function for randomizing color per instance
+                float hash11(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
+            `);
+
+            mat.Fragment_Custom_Diffuse(`
+                // Generate a random value based on the instance index
+                float randomness = hash11(vIdx * 0.1);
+
+                // Calculate a base color variation per instance
+                vec3 computedGrassColor = vDiffuseColor.rgb; // Start with the material's diffuse color
+                computedGrassColor *= (0.85 + randomness * 0.3); // Vary brightness/saturation
+                computedGrassColor.g *= (0.95 + randomness * 0.1); // Slightly vary green component
+                computedGrassColor.r *= (1.0 + randomness * 0.1); // Slightly vary red component
+
+                // Darken the grass towards the base (scaled by vR)
+                computedGrassColor *= (0.6 + vR * 0.6);
+
+                // Assign the calculated color to the diffuse color for lighting calculations
+                diffuseColor = computedGrassColor;
+            `);
+
+            // --- Uniforms and Animation ---
+            mat.AddUniform('iTime', 'float'); // Add a uniform to pass time to the shader
+
+            // --- MODIFIED: Update iTime uniform in onBindObservable ---
+            const startTime = Date.now();
+            mat.onBindObservable.add(() => {
+                const currentTime = Date.now();
+                const time = (currentTime - startTime) * 0.001; // Time in seconds
+                const effect = mat.getEffect();
+                 if (effect && effect.isReady()) { // Check if effect is ready
+                    effect.setFloat('iTime', time);
+                    // console.log("Updating iTime in onBind:", time); // Uncomment for debugging
+                 }
+            });
+            console.log("Material onBindObservable added for animation.");
+            // --- END MODIFIED ---
+
+            return scene;
+        };
+        // ========================================================
+        // END OF createScene FUNCTION
+        // ========================================================
+
+        var scene = createScene(); // Call createScene to build the scene
+
+        // --- DEBUGGING: Check if scene was created ---
+        if (!scene) {
+             console.error("Error: Scene was not created.");
+             // alert("Error creating scene!");
+        } else {
+             console.log("Scene creation function finished. Starting render loop.");
+             engine.runRenderLoop(function () {
+                 if (scene && scene.activeCamera) {
+                     scene.render();
+                     // console.log("Render loop running."); // Uncomment for debugging render loop
+                 }
+             });
         }
+        // --- END DEBUGGING ---
 
-        function init() {
-            particles.length = 0;
-            for (let i = 0; i < numParticles; i++) {
-                particles.push(new Particle(Math.random() * canvas.width, Math.random() * canvas.height));
-            }
-        }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const applyShaders = document.getElementById('shaderToggle').checked;
-            for (const particle of particles) {
-                particle.update();
-                particle.draw(applyShaders);
-            }
-        }
-
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            init();
+        window.addEventListener("resize", function () {
+            engine.resize();
         });
-
-        document.getElementById('gravitySlider').addEventListener('input', (e) => {
-            gravity = parseFloat(e.target.value);
-            document.getElementById('gravityValue').textContent = `Gravity: ${e.target.value}`;
-        });
-
-        document.getElementById('numParticlesSlider').addEventListener('input', (e) => {
-            numParticles = parseInt(e.target.value);
-            document.getElementById('numParticlesValue').textContent = `Particles: ${e.target.value}`;
-            init();
-        });
-
-        document.getElementById('resetBtn').addEventListener('click', init);
-
-        init();
-        animate();
     </script>
 </body>
 </html>

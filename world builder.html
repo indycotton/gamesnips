@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Voxel World + Workers</title> <style>
+        body { margin: 0; overflow: hidden; background-color: #ADD8E6; }
+        canvas { display: block; }
+        #blocker { position: absolute; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; }
+        #instructions { width: 50%; background-color: white; padding: 20px; border-radius: 10px; cursor: pointer; text-align: center; font-size: 20px; font-family: sans-serif; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; color: white; background-color: rgba(0,0,0,0.3); padding: 5px; font-family: monospace; z-index: 100; display:block; }
+    </style>
+</head>
+<body>
+    <div id="blocker"><div id="instructions">Click to play<br>(W, A, S, D = Move, MOUSE = Look)</div></div>
+    <div id="info">Loading... (Using Web Worker)</div> <script type="importmap">
+        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        // ImprovedNoise is now only needed in the worker
+
+        let scene, camera, renderer, controls; let clock;
+        let moveForward = false; let moveBackward = false; let moveLeft = false; let moveRight = false;
+        const velocity = new THREE.Vector3(); const direction = new THREE.Vector3();
+        const moveSpeed = 50.0; const dampingFactor = 0.85;
+
+        // --- World Parameters (passed to worker) ---
+        const DENSITY_FACTOR = 2;
+        const BASE_CHUNK_SIZE_X = 16; const BASE_CHUNK_SIZE_Y = 64; const BASE_CHUNK_SIZE_Z = 16; const BASE_VOXEL_SIZE = 1.0;
+        const CHUNK_SIZE_X = BASE_CHUNK_SIZE_X * DENSITY_FACTOR; const CHUNK_SIZE_Y = BASE_CHUNK_SIZE_Y * DENSITY_FACTOR; const CHUNK_SIZE_Z = BASE_CHUNK_SIZE_Z * DENSITY_FACTOR; const VOXEL_SIZE = BASE_VOXEL_SIZE / DENSITY_FACTOR;
+        const RENDER_DISTANCE = 4; const CHUNK_UPDATE_INTERVAL = 0.1; // Can potentially update more often now
+        const VOXEL_AIR = 0; const VOXEL_GRASS = 1; const VOXEL_DIRT = 2; const VOXEL_STONE = 3; const VOXEL_WOOD = 4; const VOXEL_LEAVES = 5;
+        const VOXEL_WATER = 6;
+        const worldChunks = new Map(); // Stores chunk state { worldX, worldZ, mesh, voxelData(null until received), needsMeshUpdate, isGenerating }
+        let lastChunkUpdateTime = 0; let statsInfoElement; let blocker, instructions;
+        let waterMaterial;
+        let terrainMaterial; // Make terrain material global too
+
+        // --- Worker Setup ---
+        let worldWorker;
+        const pendingChunks = new Set(); // Keep track of keys sent to worker
+
+        // --- Voxel & Chunk Helpers ---
+        function getChunkKey(chunkX, chunkZ) { return `${chunkX},${chunkZ}`; }
+
+        // getVoxelGlobal is still needed for MAIN THREAD logic (e.g., basic physics, interactions)
+        // but NOT directly by the meshing algorithm anymore.
+        function getVoxelGlobal(worldX, worldY, worldZ) {
+            if (worldY < 0 || worldY >= CHUNK_SIZE_Y * VOXEL_SIZE) return VOXEL_AIR;
+            const physicalChunkSizeX = BASE_CHUNK_SIZE_X * BASE_VOXEL_SIZE;
+            const physicalChunkSizeZ = BASE_CHUNK_SIZE_Z * BASE_VOXEL_SIZE;
+            const chunkX = Math.floor(worldX / physicalChunkSizeX);
+            const chunkZ = Math.floor(worldZ / physicalChunkSizeZ);
+            const key = getChunkKey(chunkX, chunkZ);
+            const chunk = worldChunks.get(key);
+
+            // If chunk or its data doesn't exist on the main thread yet, assume AIR
+            if (!chunk || !chunk.voxelData) return VOXEL_AIR;
+
+            const chunkOriginX = chunk.worldX;
+            const chunkOriginZ = chunk.worldZ;
+            const localX = Math.floor((worldX - chunkOriginX) / VOXEL_SIZE);
+            const localY = Math.floor(worldY / VOXEL_SIZE);
+            const localZ = Math.floor((worldZ - chunkOriginZ) / VOXEL_SIZE);
+
+            if (localX < 0 || localX >= CHUNK_SIZE_X || localY < 0 || localY >= CHUNK_SIZE_Y || localZ < 0 || localZ >= CHUNK_SIZE_Z) {
+                return VOXEL_AIR; // Outside local bounds
+            }
+            const index = localY * CHUNK_SIZE_X * CHUNK_SIZE_Z + localZ * CHUNK_SIZE_X + localX;
+            if (index < 0 || index >= chunk.voxelData.length) return VOXEL_AIR;
+
+            return chunk.voxelData[index];
+        }
+
+        // --- generateChunkData and generateGreedyMesh are now in worker.js ---
+
+
+        // --- World Update --- (Manages chunk state and sends requests to worker)
+        function updateChunks() {
+            const now = clock.getElapsedTime();
+            if (now - lastChunkUpdateTime < CHUNK_UPDATE_INTERVAL) return;
+            lastChunkUpdateTime = now;
+
+            if (!worldWorker) { // Don't run if worker isn't ready
+                console.warn("Worker not initialized yet.");
+                return;
+            }
+
+            const camPos = camera.position;
+            const physicalChunkSizeX = BASE_CHUNK_SIZE_X * BASE_VOXEL_SIZE;
+            const physicalChunkSizeZ = BASE_CHUNK_SIZE_Z * BASE_VOXEL_SIZE;
+            const camChunkX = Math.floor(camPos.x / physicalChunkSizeX);
+            const camChunkZ = Math.floor(camPos.z / physicalChunkSizeZ);
+
+            const activeChunkKeys = new Set();
+            const chunksToRequest = []; // Chunks to send to the worker
+
+            // Identify needed chunks
+            const minX = camChunkX - RENDER_DISTANCE; const maxX = camChunkX + RENDER_DISTANCE;
+            const minZ = camChunkZ - RENDER_DISTANCE; const maxZ = camChunkZ + RENDER_DISTANCE;
+
+            for (let cx = minX; cx <= maxX; cx++) {
+                for (let cz = minZ; cz <= maxZ; cz++) {
+                    const key = getChunkKey(cx, cz);
+                    activeChunkKeys.add(key);
+                    let chunk = worldChunks.get(key);
+
+                    if (!chunk) {
+                        // New chunk needed
+                        chunk = {
+                            key: key,
+                            worldX: cx * physicalChunkSizeX, worldZ: cz * physicalChunkSizeZ,
+                            mesh: null, voxelData: null,
+                            needsMeshUpdate: true, // Needs data and mesh
+                            isGenerating: false // Not yet sent to worker
+                        };
+                        worldChunks.set(key, chunk);
+                        chunksToRequest.push(chunk);
+                         // Mark neighbors for potential update when this one finishes
+                         markNeighborsNeedUpdate(cx, cz);
+                    } else if (chunk.needsMeshUpdate && !chunk.isGenerating && !pendingChunks.has(key)) {
+                        // Chunk exists, needs update, and isn't already being processed
+                        chunksToRequest.push(chunk);
+                    }
+                }
+            }
+
+             // --- Prioritize chunks closer to the camera ---
+            chunksToRequest.sort((a, b) => {
+                const distA = Math.hypot(a.worldX + physicalChunkSizeX / 2 - camPos.x, a.worldZ + physicalChunkSizeZ / 2 - camPos.z);
+                const distB = Math.hypot(b.worldX + physicalChunkSizeX / 2 - camPos.x, b.worldZ + physicalChunkSizeZ / 2 - camPos.z);
+                return distA - distB;
+            });
+
+
+            // Limit requests per frame to avoid flooding the worker (optional)
+            const maxRequestsPerFrame = 4; // Adjust as needed
+            let requestsSent = 0;
+
+            // Send requests to worker
+            for (const chunk of chunksToRequest) {
+                 if (requestsSent >= maxRequestsPerFrame) break;
+                 if (!chunk.isGenerating && !pendingChunks.has(chunk.key)) {
+                    chunk.isGenerating = true; // Mark as sent
+                    pendingChunks.add(chunk.key); // Add to pending set
+
+                    // console.log(`Main: Requesting chunk ${chunk.key}`);
+                    const currentChunkX = Math.floor(chunk.worldX / physicalChunkSizeX);
+                    const currentChunkZ = Math.floor(chunk.worldZ / physicalChunkSizeZ);
+
+                    worldWorker.postMessage({
+                        type: 'generateChunk',
+                        payload: { chunkX: currentChunkX, chunkZ: currentChunkZ, key: chunk.key }
+                    });
+                    requestsSent++;
+                 }
+            }
+
+
+            // Unload chunks that are out of range
+            for (const [key, chunk] of worldChunks.entries()) {
+                if (!activeChunkKeys.has(key)) {
+                     // Check if it's being generated by the worker
+                    if (pendingChunks.has(key)) {
+                        // TODO: Send cancellation message to worker? Complex.
+                        // For now, just remove from pending set on main thread.
+                        pendingChunks.delete(key);
+                    }
+                    // Remove mesh from scene
+                    if (chunk.mesh) {
+                        scene.remove(chunk.mesh);
+                        if (chunk.mesh.geometry) chunk.mesh.geometry.dispose();
+                    }
+                    worldChunks.delete(key); // Remove from map
+                    // console.log(`Main: Unloaded chunk ${key}`);
+                }
+            }
+
+            updateStats();
+        }
+
+        // Helper to mark neighbors when a chunk changes, forcing mesh updates
+        function markNeighborsNeedUpdate(chunkX, chunkZ) {
+             const neighborOffsets = [[-1,0], [1,0], [0,-1], [0,1]];
+             for (const offset of neighborOffsets) {
+                 const neighborKey = getChunkKey(chunkX + offset[0], chunkZ + offset[1]);
+                 const neighborChunk = worldChunks.get(neighborKey);
+                 // Only mark if exists, has data, isn't already updating/generating
+                 if (neighborChunk && neighborChunk.voxelData && !neighborChunk.needsMeshUpdate && !neighborChunk.isGenerating && !pendingChunks.has(neighborKey)) {
+                     // console.log(`Main: Marking neighbor ${neighborKey} for update because ${getChunkKey(chunkX, chunkZ)} changed`);
+                     neighborChunk.needsMeshUpdate = true;
+                     // No need to push to chunksToRequest here, updateChunks loop will pick it up
+                 }
+             }
+        }
+
+
+        // Function to handle messages received FROM the worker
+        function handleWorkerMessage(event) {
+            const { type, payload } = event.data;
+
+            if (type === 'chunkGenerated') {
+                const { key, voxelData, geometry } = payload;
+                const chunk = worldChunks.get(key);
+                 pendingChunks.delete(key); // Remove from pending set
+
+                if (!chunk) {
+                    // console.log(`Main: Received data for unloaded chunk ${key}. Discarding.`);
+                    // Chunk might have been unloaded while worker was busy
+                    return;
+                }
+
+                // console.log(`Main: Received generated data for chunk ${key}`);
+                chunk.isGenerating = false; // Mark as finished generating
+
+                 // Store voxel data (recreate Uint8Array from buffer)
+                chunk.voxelData = new Uint8Array(voxelData);
+
+
+                // --- Process Geometry Data ---
+                if (chunk.mesh) { // Remove old mesh first
+                    scene.remove(chunk.mesh);
+                    if (chunk.mesh.geometry) chunk.mesh.geometry.dispose();
+                    chunk.mesh = null;
+                }
+
+                if (geometry) { // If mesh data was generated
+                    const bufferGeom = new THREE.BufferGeometry();
+
+                    // IMPORTANT: Reconstruct attributes from ArrayBuffers
+                    bufferGeom.setAttribute('position', new THREE.Float32BufferAttribute(geometry.positions, 3));
+                    bufferGeom.setAttribute('normal', new THREE.Float32BufferAttribute(geometry.normals, 3));
+                    bufferGeom.setAttribute('uv', new THREE.Float32BufferAttribute(geometry.uvs, 2));
+                    bufferGeom.setAttribute('color', new THREE.Float32BufferAttribute(geometry.colors, 3));
+
+                    // Add groups
+                    geometry.groups.forEach(group => {
+                        bufferGeom.addGroup(group.start, group.count, group.materialIndex);
+                    });
+
+                    bufferGeom.computeBoundingSphere(); // Crucial for culling
+
+                    // Create mesh (ensure materials are ready)
+                    if (terrainMaterial && waterMaterial) {
+                         const chunkMaterials = [terrainMaterial, waterMaterial];
+                         chunk.mesh = new THREE.Mesh(bufferGeom, chunkMaterials);
+                         chunk.mesh.position.set(chunk.worldX, 0, chunk.worldZ);
+                         scene.add(chunk.mesh);
+                         chunk.needsMeshUpdate = false; // Mesh is now up-to-date
+                         // console.log(`Main: Added mesh for ${key}`);
+
+                          // Mark neighbors for update AFTER this chunk is successfully added
+                          const chunkCoords = key.split(',').map(Number);
+                          markNeighborsNeedUpdate(chunkCoords[0], chunkCoords[1]);
+
+                    } else {
+                         console.error("Materials not ready when applying chunk mesh!");
+                         chunk.needsMeshUpdate = true; // Retry mesh application later
+                    }
+                } else {
+                    // console.log(`Main: No mesh generated for ${key}`);
+                    chunk.needsMeshUpdate = false; // Mark as updated (empty mesh)
+                     // Mark neighbors even if mesh is empty
+                     const chunkCoords = key.split(',').map(Number);
+                     markNeighborsNeedUpdate(chunkCoords[0], chunkCoords[1]);
+                }
+
+
+            } else {
+                console.warn("Main: Received unknown message type from worker:", type);
+            }
+        }
+
+        // Update the information display
+        function updateStats() {
+            if (!statsInfoElement) return;
+            const activeChunks = worldChunks.size;
+            let visibleMeshes = 0;
+            worldChunks.forEach(chunk => { if(chunk.mesh) visibleMeshes++; });
+            const pendingCount = pendingChunks.size;
+            statsInfoElement.textContent = `Chunks: ${activeChunks}(${pendingCount}) | Meshes: ${visibleMeshes} | Pos: ${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;
+        }
+
+        // Set up event listeners for controls
+        function setupEventListeners() {
+            blocker = document.getElementById('blocker');
+            instructions = document.getElementById('instructions');
+            instructions.addEventListener('click', () => controls.lock());
+            controls.addEventListener('lock', () => { instructions.style.display = 'none'; blocker.style.display = 'none'; });
+            controls.addEventListener('unlock', () => { blocker.style.display = 'flex'; instructions.style.display = ''; });
+            const onKeyPress = (event, isDown) => {
+                switch (event.code) {
+                    case 'ArrowUp': case 'KeyW': moveForward = isDown; break;
+                    case 'ArrowLeft': case 'KeyA': moveLeft = isDown; break;
+                    case 'ArrowDown': case 'KeyS': moveBackward = isDown; break;
+                    case 'ArrowRight': case 'KeyD': moveRight = isDown; break;
+                }
+            };
+            document.addEventListener('keydown', (event) => onKeyPress(event, true));
+            document.addEventListener('keyup', (event) => onKeyPress(event, false));
+        }
+
+        // --- Three.js Setup ---
+        function init() {
+            clock = new THREE.Clock();
+            statsInfoElement = document.getElementById('info');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xADD8E6);
+            const physicalRenderDist = RENDER_DISTANCE * BASE_CHUNK_SIZE_X * BASE_VOXEL_SIZE;
+            scene.fog = new THREE.Fog(0xADD8E6, physicalRenderDist * 0.4, physicalRenderDist * 1.1);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, physicalRenderDist * 1.5);
+            const waterLevelWorldY = Math.floor(CHUNK_SIZE_Y / 2.8) * VOXEL_SIZE;
+            camera.position.set( BASE_CHUNK_SIZE_X / 2 * BASE_VOXEL_SIZE, waterLevelWorldY + 10 * VOXEL_SIZE, BASE_CHUNK_SIZE_Z / 2 * BASE_VOXEL_SIZE );
+            camera.near = 0.5;
+            camera.updateProjectionMatrix();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xCCCCCC); scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(1, 1.5, 0.5).normalize(); scene.add(directionalLight);
+
+            // --- Define Materials ---
+             terrainMaterial = new THREE.MeshLambertMaterial({
+                vertexColors: true, side: THREE.FrontSide
+            });
+
+            // --- Define Water Shader (same as before) ---
+             const waterVertexShader = `
+                uniform float uTime; uniform float uWaveFrequency; uniform float uWaveAmplitude;
+                varying vec3 vWorldPosition; varying vec3 vNormal;
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    float waveDisplacement = 0.0;
+                    if (normal.y > 0.9) {
+                       float waveX = sin(worldPos.x * uWaveFrequency + uTime * 0.8) * uWaveAmplitude;
+                       float waveZ = cos(worldPos.z * uWaveFrequency * 0.8 + uTime * 0.6) * uWaveAmplitude;
+                       waveDisplacement = waveX + waveZ; worldPos.y += waveDisplacement;
+                       vec3 tangent = normalize(vec3(1.0, cos(worldPos.x * uWaveFrequency + uTime * 0.8) * uWaveAmplitude * uWaveFrequency, 0.0));
+                       vec3 bitangent = normalize(vec3(0.0, -sin(worldPos.z * uWaveFrequency * 0.8 + uTime * 0.6) * uWaveAmplitude * uWaveFrequency * 0.8, 1.0));
+                       vec3 perturbedNormal = normalize(cross(bitangent, tangent));
+                       vNormal = normalize(normalMatrix * perturbedNormal);
+                    }
+                    vWorldPosition = worldPos.xyz;
+                    gl_Position = projectionMatrix * viewMatrix * worldPos;
+                }
+            `;
+            const waterFragmentShader = `
+                uniform float uTime; uniform vec3 uWaterColor; uniform vec3 uSunDirection; uniform vec3 uSunColor;
+                uniform vec3 uAmbientLightColor; uniform float uShininess; uniform float uSpecularIntensity; uniform float uOpacity;
+                uniform float uFogNear; uniform float uFogFar; uniform vec3 uFogColor;
+                varying vec3 vWorldPosition; varying vec3 vNormal;
+                float calculateFogFactor(float dist) { return smoothstep(uFogNear, uFogFar, dist); }
+                void main() {
+                    vec3 normal = normalize(vNormal); vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
+                    vec3 ambient = uAmbientLightColor * uWaterColor;
+                    float diffuseStrength = max(dot(normal, uSunDirection), 0.0); vec3 diffuse = uSunColor * diffuseStrength * uWaterColor;
+                    vec3 halfwayDirection = normalize(uSunDirection + viewDirection); float specAngle = max(dot(normal, halfwayDirection), 0.0);
+                    float specularStrength = pow(specAngle, uShininess) * uSpecularIntensity; vec3 specular = uSunColor * specularStrength;
+                    float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(normal, viewDirection), 0.0), 5.0);
+                    vec3 lighting = ambient + diffuse; vec3 finalColor = mix(lighting, specular + lighting, fresnel);
+                    float shimmer = (sin(vWorldPosition.x * 0.5 + uTime * 0.5) + cos(vWorldPosition.z * 0.5 + uTime * 0.7)) * 0.03; finalColor += shimmer;
+                    float dist = length(vWorldPosition - cameraPosition); float fogFactor = calculateFogFactor(dist); finalColor = mix(finalColor, uFogColor, fogFactor);
+                    gl_FragColor = vec4(finalColor, uOpacity);
+                }
+            `;
+             waterMaterial = new THREE.ShaderMaterial({
+                vertexShader: waterVertexShader, fragmentShader: waterFragmentShader,
+                uniforms: {
+                    uTime: { value: 0.0 }, uWaterColor: { value: new THREE.Color(0x205080) },
+                    uWaveFrequency: { value: 4.0 / VOXEL_SIZE / DENSITY_FACTOR }, uWaveAmplitude: { value: 0.03 * VOXEL_SIZE },
+                    uSunDirection: { value: directionalLight.position.clone().normalize() },
+                    uSunColor: { value: new THREE.Color(directionalLight.color).multiplyScalar(directionalLight.intensity) },
+                    uAmbientLightColor: { value: new THREE.Color(ambientLight.color).multiplyScalar(ambientLight.intensity) },
+                    uShininess: { value: 60.0 }, uSpecularIntensity: { value: 0.6 }, uOpacity: { value: 0.85 },
+                    uFogColor: { value: scene.fog.color }, uFogNear: { value: scene.fog.near }, uFogFar: { value: scene.fog.far },
+                },
+                transparent: true, side: THREE.FrontSide, fog: false, // Manual fog in shader
+                 polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+            });
+
+            // --- Initialize Worker ---
+            console.log("Main: Initializing worker...");
+            worldWorker = new Worker('worker.js', { type: 'module' }); // Crucial: type: 'module' for import support
+            worldWorker.onmessage = handleWorkerMessage; // Set message handler
+            worldWorker.onerror = (error) => {
+                console.error("Main: Worker error:", error);
+                statsInfoElement.textContent = "Worker Error! See console.";
+                 statsInfoElement.style.color = "red";
+                 statsInfoElement.style.backgroundColor = "black";
+
+            };
+
+            // Send initialization parameters to worker
+            const workerParams = {
+                DENSITY_FACTOR, BASE_CHUNK_SIZE_X, BASE_CHUNK_SIZE_Y, BASE_CHUNK_SIZE_Z,
+                BASE_VOXEL_SIZE, CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, VOXEL_SIZE
+            };
+            worldWorker.postMessage({ type: 'init', payload: { params: workerParams } });
+            console.log("Main: Sent init params to worker.");
+
+
+            controls = new PointerLockControls(camera, renderer.domElement);
+            scene.add(controls.getObject());
+            setupEventListeners();
+
+            // Initial chunk check (will send requests to worker)
+            updateChunks();
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            console.log("Main: Initialization complete. Starting animation loop.");
+            animate();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+             if (waterMaterial) { // Update fog uniforms on resize
+                 waterMaterial.uniforms.uFogNear.value = scene.fog.near;
+                 waterMaterial.uniforms.uFogFar.value = scene.fog.far;
+             }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsedTime = clock.getElapsedTime();
+
+            if (waterMaterial) { waterMaterial.uniforms.uTime.value = elapsedTime; }
+
+            if (controls.isLocked === true) {
+                velocity.x *= dampingFactor; velocity.z *= dampingFactor;
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+                const currentMoveSpeed = moveSpeed;
+                if (moveForward || moveBackward) velocity.z -= direction.z * currentMoveSpeed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * currentMoveSpeed * delta;
+                controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta);
+            } else {
+                velocity.set(0, 0, 0);
+            }
+
+            // Update chunk states / request new ones periodically
+            updateChunks();
+
+            renderer.render(scene, camera);
+        }
+
+        // --- Start the application ---
+        init();
+
+    </script>
+</body>
+</html>
