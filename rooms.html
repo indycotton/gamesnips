@@ -60,104 +60,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: white;
+            background-color: white; /* Default flash color */
             opacity: 0; /* Initially hidden */
             pointer-events: none; /* Allow clicks through */
             z-index: 9999; /* Ensure it's on top */
-            transition: opacity 0.03s ease-out; /* Faster fade out */
+            /* Default transition for fade-out, can be overridden by JS */
+            transition: opacity 0.15s ease-out;
         }
-
-        /* --- Menu Styles --- */
-        #menu {
-            position: absolute;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90%; /* Limit height to prevent overflow */
-            overflow-y: auto; /* Add scroll if content is too tall */
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(30, 30, 30, 0.95); /* Darker menu background */
-            color: white;
-            padding: 30px;
-            border-radius: 15px;
-            z-index: 20; /* Above blocker */
-            display: none; /* Hidden by default */
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7); /* Stronger shadow */
-            border: 1px solid rgba(255, 255, 255, 0.3); /* Subtle border */
-        }
-
-        #menu h2 {
-            text-align: center;
-            margin-top: 0;
-            margin-bottom: 20px;
-            color: #fff;
-            font-size: 1.8em;
-        }
-
-        .menu-option {
-            margin-bottom: 20px;
-        }
-
-        .menu-option label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 1.1em;
-            color: #eee; /* Lighter label color */
-        }
-
-        .menu-option input[type="range"] {
-            width: 100%;
-            -webkit-appearance: none; /* Override default slider styles */
-            appearance: none;
-            height: 8px;
-            background: #555; /* Darker track */
-            outline: none;
-            opacity: 0.8;
-            transition: opacity .2s;
-            border-radius: 4px;
-        }
-
-        .menu-option input[type="range"]:hover {
-            opacity: 1;
-        }
-
-        .menu-option input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            background: #ffb700; /* Backrooms yellow thumb */
-            cursor: pointer;
-            border-radius: 50%;
-            border: 2px solid #fff; /* White border on thumb */
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        }
-
-        .menu-option input[type="range"]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: #ffb700; /* Backrooms yellow thumb */
-            cursor: pointer;
-            border-radius: 50%;
-            border: 2px solid #fff; /* White border on thumb */
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        }
-
-         .menu-option .slider-value {
-             display: block;
-             text-align: right;
-             font-size: 0.9em;
-             color: #ccc; /* Lighter value color */
-             margin-top: 5px;
-         }
-
-         #menu p {
-             font-size: 0.9em;
-             color: #aaa;
-             text-align: center;
-             margin-top: 20px;
-         }
 
     </style>
 </head>
@@ -170,70 +79,6 @@
     </div>
 
     <div id="flashOverlay"></div>
-
-    <div id="menu">
-        <h2>Backrooms Settings</h2>
-
-        <div class="menu-option">
-            <label for="fogNear">Fog Near Distance:</label>
-            <input type="range" id="fogNear" min="10" max="200" value="50" step="1">
-            <span class="slider-value" id="fogNearValue">50</span>
-        </div>
-
-         <div class="menu-option">
-            <label for="fogFar">Fog Far Distance:</label>
-            <input type="range" id="fogFar" min="100" max="1000" value="250" step="1">
-            <span class="slider-value" id="fogFarValue">250</span>
-        </div>
-
-        <div class="menu-option">
-            <label for="ambientLightIntensity">Ambient Light Intensity:</label>
-            <input type="range" id="ambientLightIntensity" min="0" max="1" value="0.5" step="0.01">
-            <span class="slider-value" id="ambientLightIntensityValue">0.5</span>
-        </div>
-
-         <div class="menu-option">
-            <label for="bloomStrength">Bloom Strength:</label>
-            <input type="range" id="bloomStrength" min="0" max="2" value="0.8" step="0.01">
-            <span class="slider-value" id="bloomStrengthValue">0.8</span>
-        </div>
-
-         <div class="menu-option">
-            <label for="bloomRadius">Bloom Radius:</label>
-            <input type="range" id="bloomRadius" min="0" max="1" value="0.4" step="0.01">
-            <span class="slider-value" id="bloomRadiusValue">0.4</span>
-        </div>
-
-        <div class="menu-option">
-            <label for="bloomThreshold">Bloom Threshold:</label>
-            <input type="range" id="bloomThreshold" min="0" max="1" value="0.8" step="0.01">
-            <span class="slider-value" id="bloomThresholdValue">0.8</span>
-        </div>
-
-        <div class="menu-option">
-            <label for="filmNoise">Film Grain Noise:</label>
-            <input type="range" id="filmNoise" min="0" max="1" value="0.25" step="0.01">
-            <span class="slider-value" id="filmNoiseValue">0.25</span>
-        </div>
-
-         <div class="menu-option">
-            <label for="filmScanlines">TV Scanlines Intensity:</label> <input type="range" id="filmScanlines" min="0" max="5" value="0.3" step="0.01"> <span class="slider-value" id="filmScanlinesValue">0.3</span>
-        </div>
-
-        <div class="menu-option">
-            <label for="filmScanlinesCount">TV Scanlines Count:</label> <input type="range" id="filmScanlinesCount" min="0" max="2048" value="648" step="1">
-            <span class="slider-value" id="filmScanlinesCountValue">648</span>
-        </div>
-
-        <div class="menu-option">
-            <label for="glitchIntensity">Video Glitch Intensity:</label> <input type="range" id="glitchIntensity" min="0" max="1" value="0.05" step="0.01">
-            <span class="slider-value" id="glitchIntensityValue">0.05</span>
-        </div>
-
-
-        <p>Press 'M' to toggle this menu.</p>
-    </div>
-
 
     <script type="importmap">
         {
@@ -255,1569 +100,592 @@
         import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { GlitchPass } from 'three/addons/postprocessing/GlitchPass.js';
-        import { InstancedMesh } from 'three'; // Import InstancedMesh
+        import { InstancedMesh } from 'three';
 
         // --- Global Variables ---
         let camera, scene, renderer, controls, composer, bloomPass, filmPass, glitchPass;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        // Removed canJump variable as jumping is removed
         let velocity = new THREE.Vector3();
         let direction = new THREE.Vector3();
         let prevTime;
 
         // --- Effect & Audio Variables ---
-        const lights = []; // Array to store light objects for flickering
-        let ambientLight; // Variable to hold the ambient light
-        // Tone.js variables declared here, but initialized *after* user gesture
-        let synth = null; // Jump scare synth
-        let noise = null; // Background ambient noise source
-        let noiseVolume = null; // Volume control for noise
-        let autoFilter = null; // Filter for noise
-        let reverb = null; // Reverb effect
-        let tremolo = null; // Tremolo effect
-        let buzzSynth = null; // Synth for fluorescent light buzzing
-        let glitchSoundSynth = null; // Synth for glitch sound
-        let hummingSynth = null; // Synth for humming sound
-        let chitteringSynth = null; // Synth for insect-like chittering
-        let speechSynth = null; // Synth for unknown speech
-        let dejaVuSound = null; // Sound for deja vu effect
-        let cryingSound = null; // Synth for distant crying
-        let moaningSound = null; // Synth for distant moaning
-        let laughterSound = null; // Synth for distant laughter
+        const lights = [];
+        let ambientLight;
+        let synth = null; // Jump scare primary synth (sharp noise)
+        let jumpScareThudSynth = null; // Added for layered jump scare sound
+        let noise = null; 
+        let noiseVolume = null; 
+        let autoFilter = null; 
+        let reverb = null; 
+        let tremolo = null; 
+        let buzzSynth = null; 
+        let glitchSoundSynth = null; 
+        let hummingSynth = null; 
+        let chitteringSynth = null; 
+        let speechSynth = null; 
+        let dejaVuSound = null; 
+        let cryingSound = null; 
+        let moaningSound = null; 
+        let laughterSound = null; 
+        let heartbeatSynth = null; 
+        let timeSinceLastHeartbeatCycle = 0;
+        const heartbeatCycleTime = 0.8; 
+        const heartbeatDubDelay = 0.15;
 
 
-        let jumpScareCooldown = 15.0; // Minimum seconds between jump scares
-        let timeSinceLastScare = jumpScareCooldown; // Time elapsed since last scare
-        let isFlashing = false; // State flag for screen flash effect
-        let flashEndTime = 0; // Timestamp when the flash should end
-        const flashDuration = 0.08; // Slightly faster duration of the flash in seconds
+        let jumpScareCooldown = 15.0; 
+        let timeSinceLastScare = jumpScareCooldown;
+        let isFlashing = false;
+        let flashEndTime = 0; // Used to time the end of the flash effect sequence
 
         // --- Entity Variables ---
-        let entityMesh = null; // Mesh to represent the entity
-        let entityActive = false; // State flag for entity presence
-        let entityAppearanceTime = 0; // Timestamp when entity appeared
-        const entityDuration = 0.5; // How long the entity stays visible (seconds)
+        let entityMesh = null;
+        let entityActive = false;
+        let entityAppearanceTime = 0;
+        const entityDuration = 0.7; 
 
         // --- Game World Constants ---
-        const floorLevel = 50; // Base Y position of the player/floor
-        const moveSpeed = 400.0; // Player movement speed
-        // Removed jumpVelocity constant
-        const gravity = 980.0; // Adjusted gravity force (approx 9.8 m/s^2 * 100 units/meter)
-        const wallHeight = 65; // Height of the maze walls
-        const pillarSize = 12; // Size of corner pillars (Note: Pillars are now just walls for simplicity in instancing)
-        const lightFixtureSize = 25; // Size of the light fixture planes
-        const wallThickness = 8; // Thickness of the maze walls
-        // Increased maze size for longer corridors
-        const mazeSizeX = 20; // Number of cells horizontally
-        const mazeSizeZ = 20; // Number of cells vertically
-        // Adjusted cellSize for narrower corridors
-        const cellSize = 70; // <<< Adjusted: Size of each maze cell (reduced for narrower corridors)
+        const floorLevel = 50;
+        const moveSpeed = 400.0;
+        const gravity = 980.0;
+        const wallHeight = 65;
+        const pillarSize = 12; 
+        const lightFixtureSize = 25;
+        const wallThickness = 8;
+        const mazeSizeX = 20;
+        const mazeSizeZ = 20;
+        const cellSize = 70;
 
 
-        // --- Materials (Using Colors for Backrooms Aesthetic - Defined once) ---
-        const backroomsYellow = 0xe0d8a8; // Slightly less saturated yellow/beige
-        const floorColor = 0xc0c0b8; // Lighter, greyish-beige floor
-        const ceilingColor = 0xfafad2; // LightGoldenrodYellow - Off-white ceiling
-        const lightFixtureColor = 0xffffff; // White light fixture
-        const entityColor = 0x000000; // Black for entity
-        const furnitureColor = 0x8b4513; // SaddleBrown for furniture
+        // --- Materials ---
+        const backroomsYellow = 0xe0d8a8;
+        const floorColor = 0xc0c0b8;
+        const ceilingColor = 0xfafad2; // Base color for ceiling if texture fails or as tint
+        const lightFixtureColor = 0xffffff;
+        const entityColor = 0x000000; 
+        const furnitureColor = 0x8b4513;
 
         const wallMaterial = new THREE.MeshStandardMaterial({ color: backroomsYellow, roughness: 0.9, metalness: 0.1 });
         const floorMaterial = new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.8, metalness: 0.2 });
-        const ceilingMaterial = new THREE.MeshStandardMaterial({ color: ceilingColor, roughness: 1.0, metalness: 0.0 });
+        
+        // CEILING TILE PATTERN: Function to create ceiling tile texture
+        function createCeilingTileTexture() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const canvasSize = 256; // Texture resolution
+            canvas.width = canvasSize;
+            canvas.height = canvasSize;
+
+            // Base tile color (off-white/light beige)
+            context.fillStyle = '#EAE0C8'; // Slightly yellowish off-white
+            context.fillRect(0, 0, canvasSize, canvasSize);
+
+            // Grid lines (darker beige/grey)
+            context.strokeStyle = '#C8BFAA'; // Darker beige for lines
+            context.lineWidth = 4; // Line thickness
+
+            // Draw grid lines to simulate 2x2 tiles within the texture
+            // Horizontal line
+            context.beginPath();
+            context.moveTo(0, canvasSize / 2);
+            context.lineTo(canvasSize, canvasSize / 2);
+            context.stroke();
+
+            // Vertical line
+            context.beginPath();
+            context.moveTo(canvasSize / 2, 0);
+            context.lineTo(canvasSize / 2, canvasSize);
+            context.stroke();
+            
+            // Optional: Add a very subtle noise/stain effect to each tile quadrant
+            for (let i = 0; i < 2; i++) {
+                for (let j = 0; j < 2; j++) {
+                    const tileX = i * canvasSize / 2;
+                    const tileY = j * canvasSize / 2;
+                    for (let k = 0; k < 20; k++) { // Add 20 small, subtle dots per quadrant
+                        const x = tileX + Math.random() * (canvasSize / 2);
+                        const y = tileY + Math.random() * (canvasSize / 2);
+                        const alpha = Math.random() * 0.05 + 0.02; // Very low alpha
+                        context.fillStyle = `rgba(180, 170, 150, ${alpha})`; // Slightly darker than grid lines
+                        context.fillRect(x, y, Math.random() * 2 + 1, Math.random() * 2 + 1); // Small dots
+                    }
+                }
+            }
+
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4; // Improve texture quality at sharp angles
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        const ceilingTexture = createCeilingTileTexture();
+        const ceilingMaterial = new THREE.MeshStandardMaterial({ 
+            map: ceilingTexture,
+            color: ceilingColor, // Base color, texture will modulate this
+            roughness: 0.95, // Ceilings are usually quite rough
+            metalness: 0.05 
+        });
+        
         const lightFixtureMaterial = new THREE.MeshBasicMaterial({ color: lightFixtureColor, side: THREE.DoubleSide });
         const entityMaterial = new THREE.MeshBasicMaterial({ color: entityColor });
         const furnitureMaterial = new THREE.MeshStandardMaterial({ color: furnitureColor, roughness: 0.7, metalness: 0.0 });
 
 
-        // --- Geometries (Defined once for reuse) ---
-        // Using a simple unit box geometry and scaling it for walls and furniture instances
+        // --- Geometries ---
         const wallGeometry = new THREE.BoxGeometry(1, 1, 1);
         const furnitureBaseGeometry = new THREE.BoxGeometry(1, 1, 1);
         const lightFixtureGeometry = new THREE.PlaneGeometry(lightFixtureSize, lightFixtureSize);
-        lightFixtureGeometry.rotateX(Math.PI / 2); // Rotate to be horizontal
+        lightFixtureGeometry.rotateX(Math.PI / 2); 
 
-        // --- Corrected: entityGeometry is now declared here ---
         const entityGeometry = new THREE.BoxGeometry(pillarSize * 0.8, wallHeight * 1.2, pillarSize * 0.8);
 
 
         // --- Instancing Data Arrays ---
-        const wallInstancesData = []; // Stores { position, scale } for walls
-        const furnitureInstancesData = []; // Stores { position, scale } for furniture
-        const doorwayInstancesData = []; // Stores { position, scale, rotation } for doorways (gaps)
+        const wallInstancesData = [];
+        const furnitureInstancesData = [];
+        const doorwayInstancesData = [];
 
         // --- Instanced Mesh Objects ---
         let wallInstanceMesh;
         let furnitureInstanceMesh;
 
         // --- Effect Timing Variables ---
-        let timeSinceLastChitter = 0;
-        const chitterCooldown = 5; // Seconds between chittering sounds
-        let timeSinceLastSpeech = 0;
-        const speechCooldown = 15; // <<< Adjusted: Seconds between speech sounds (more frequent)
-        let timeSinceLastDejaVu = 0;
-        const dejaVuCooldown = 30; // Seconds between deja vu effects
-        const dejaVuDuration = 0.5; // Duration of the deja vu effect (seconds)
-        let isDejaVu = false; // State flag for deja vu effect
-        let dejaVuEndTime = 0; // Timestamp when deja vu ends
-        // <<< Added: Timing variables for new sounds
-        let timeSinceLastCrying = 0;
-        const cryingCooldown = 30; // <<< Adjusted: Seconds between crying sounds (more frequent)
-        let timeSinceLastMoaning = 0;
-        const moaningCooldown = 40; // <<< Adjusted: Seconds between moaning sounds (more frequent)
-        let timeSinceLastLaughter = 0;
-        const laughterCooldown = 50; // <<< Adjusted: Seconds between laughter sounds (more frequent)
-        // Added End >>>
+        let timeSinceLastChitter = 0; const chitterCooldown = 5;
+        let timeSinceLastSpeech = 0; const speechCooldown = 15;
+        let timeSinceLastDejaVu = 0; const dejaVuCooldown = 30; const dejaVuDuration = 0.5;
+        let isDejaVu = false; let dejaVuEndTime = 0;
+        let timeSinceLastCrying = 0; const cryingCooldown = 30;
+        let timeSinceLastMoaning = 0; const moaningCooldown = 40;
+        let timeSinceLastLaughter = 0; const laughterCooldown = 50;
 
 
         // --- Demo Mode Variables ---
-        let demoTimer = null; // Timer for starting the demo
-        const demoDelay = 10000; // 10 seconds delay before demo starts
-        let isDemoMode = false; // Flag to indicate if demo mode is active
-        const demoMoveSpeed = 80.0; // Speed of demo movement
-        const demoTurnInterval = 3.0; // Time in seconds between random demo turns
-        let timeSinceLastDemoTurn = 0; // Timer for demo turns
+        let demoTimer = null; const demoDelay = 10000; let isDemoMode = false;
+        const demoMoveSpeed = 80.0; const demoTurnInterval = 3.0; let timeSinceLastDemoTurn = 0;
 
 
-        // --- Optimization Settings ---
-        const RENDER_SCALE = 0.8; // Render at a lower resolution and scale up (e.8 = 80%)
-        // Default Bloom parameters (will be overridden by sliders)
-        const BLOOM_STRENGTH = 0.8;
-        const BLOOM_THRESHOLD = 0.8;
-        const BLOOM_RADIUS = 0.4;
-        // Default Film parameters (will be overridden by sliders)
-        const FILM_NOISE = 0.25;
-        const FILM_SCANLINES_INTENSITY = 0.3; // Default Intensity
-        const FILM_SCANLINES_COUNT = 648;    // Default Count
-        const GLITCH_INTENSITY = 0.05; // Default Glitch Intensity
+        // --- Default Effect Values ---
+        const RENDER_SCALE = 0.8;
+        const DEFAULT_FOG_NEAR = 50; const DEFAULT_FOG_FAR = 250;
+        const DEFAULT_AMBIENT_LIGHT_INTENSITY = 0.5;
+        const BLOOM_STRENGTH = 0.8; const BLOOM_THRESHOLD = 0.8; const BLOOM_RADIUS = 0.4;
+        const FILM_NOISE = 0.25; const FILM_SCANLINES_INTENSITY = 0.3; const FILM_SCANLINES_COUNT = 648;
+        const GLITCH_INTENSITY = 0.05; 
 
-        // --- Maze Generation Constants ---
-        const DOORWAY_CHANCE = 0.15; // Chance (0-1) for a passage to become a doorway
-
-
-        // --- Menu Elements (Declared here) ---
-        let menuElement;
-        let fogNearSlider, fogFarSlider, ambientLightIntensitySlider, bloomStrengthSlider, bloomRadiusSlider, bloomThresholdSlider, filmNoiseSlider, filmScanlinesSlider, filmScanlinesCountSlider, glitchIntensitySlider;
-
-        // --- Slider Value Displays (Declared here) ---
-        let fogNearValueSpan, fogFarValueSpan, ambientLightIntensityValueSpan, bloomStrengthValueSpan, bloomRadiusValueSpan, bloomThresholdValueSpan, filmNoiseValueSpan, filmScanlinesValueSpan, filmScanlinesCountValueSpan, glitchIntensityValueSpan;
+        const DOORWAY_CHANCE = 0.15;
 
         // --- Initialization and Start ---
-        init(); // Set up the scene, camera, renderer, etc.
-        prevTime = performance.now(); // Initialize time for first frame
-        animate(); // Start the main game loop
+        init(); // Renderer needs to be available for createCeilingTileTexture's anisotropy
+        prevTime = performance.now();
+        animate();
 
         // --- Core Functions ---
-
-        /**
-         * Initializes the entire game scene, renderer, controls, lighting, and geometry.
-         * Audio initialization is now deferred until user gesture.
-         */
         function init() {
-            // --- Get Menu Elements ---
-            assignMenuElements();
-
-            // --- Check if all required elements were found ---
+            // Renderer setup is needed before texture creation if using anisotropy from capabilities
+            setupRenderer(); // Moved renderer setup earlier
             checkRequiredElements();
-
-            // --- Scene Setup ---
             setupScene();
-
-            // --- Camera Setup ---
             setupCamera();
-
-            // --- Renderer Setup ---
-            setupRenderer();
-
-            // --- Postprocessing Setup ---
+            // setupRenderer(); // Moved up
             setupPostProcessing();
-
-            // --- Lighting Setup ---
             setupLighting();
-
-            // --- Entity Setup ---
             setupEntity();
-
-            // --- Controls Setup ---
-            setupControls();
-
-            // --- Add Slider Event Listeners ---
-            addSliderEventListeners();
-
-            // Initial update of slider values display
-            // Called after controls setup to ensure menu is available
-             if (menuElement) {
-                 updateSettings();
-             } else {
-                 console.warn("Menu element not found, skipping initial updateSettings call.");
-             }
-
-
-            // --- Base Geometry (Floor and Ceiling) ---
+            setupControls(); 
             createBaseGeometry();
-
-            // --- Procedural Layout Generation (Populates wallInstancesData, furnitureInstancesData, doorwayInstancesData) ---
             generateMazeLayout(mazeSizeX, mazeSizeZ, cellSize);
-
-            // --- Create Instanced Meshes from Data and Add to Scene ---
             createInstancedMeshes();
-
-            // --- Resize Listener ---
             window.addEventListener('resize', onWindowResize);
-
-            // --- Start Demo Timer ---
             startDemoTimer();
         }
 
-        /**
-         * Assigns HTML menu elements to global variables.
-         */
-        function assignMenuElements() {
-            menuElement = document.getElementById('menu');
-            fogNearSlider = document.getElementById('fogNear');
-            fogFarSlider = document.getElementById('fogFar');
-            ambientLightIntensitySlider = document.getElementById('ambientLightIntensity');
-            bloomStrengthSlider = document.getElementById('bloomStrength');
-            bloomRadiusSlider = document.getElementById('bloomRadius');
-            bloomThresholdSlider = document.getElementById('bloomThreshold');
-            filmNoiseSlider = document.getElementById('filmNoise');
-            filmScanlinesSlider = document.getElementById('filmScanlines');
-            filmScanlinesCountSlider = document.getElementById('filmScanlinesCount');
-            glitchIntensitySlider = document.getElementById('glitchIntensity');
-
-            fogNearValueSpan = document.getElementById('fogNearValue');
-            fogFarValueSpan = document.getElementById('fogFarValue');
-            ambientLightIntensityValueSpan = document.getElementById('ambientLightIntensityValue');
-            bloomStrengthValueSpan = document.getElementById('bloomStrengthValue');
-            bloomRadiusValueSpan = document.getElementById('bloomRadiusValue');
-            bloomThresholdValueSpan = document.getElementById('bloomThresholdValue');
-            filmNoiseValueSpan = document.getElementById('filmNoiseValue');
-            filmScanlinesValueSpan = document.getElementById('filmScanlinesValue');
-            filmScanlinesCountValueSpan = document.getElementById('filmScanlinesCountValue');
-            glitchIntensityValueSpan = document.getElementById('glitchIntensityValue');
+        function checkRequiredElements() {
+             const requiredElements = {
+                 blocker: document.getElementById('blocker'),
+                 instructions: document.getElementById('instructions'),
+                 flashOverlay: document.getElementById('flashOverlay')
+             };
+             for (const id in requiredElements) {
+                 if (requiredElements[id] === null) {
+                     console.error(`Error: Required HTML element with ID or variable name '${id}' not found or assigned.`);
+                 }
+             }
         }
 
-         /**
-          * Checks if essential HTML elements for settings and blocker exist.
-          */
-         function checkRequiredElements() {
-              const requiredElements = {
-                  menuElement: menuElement,
-                  fogNearSlider: fogNearSlider, fogFarSlider: fogFarSlider,
-                  ambientLightIntensitySlider: ambientLightIntensitySlider,
-                  bloomStrengthSlider: bloomStrengthSlider, bloomRadiusSlider: bloomRadiusSlider, bloomThresholdSlider: bloomThresholdSlider,
-                  filmNoiseSlider: filmNoiseSlider, filmScanlinesSlider: filmScanlinesSlider, filmScanlinesCountSlider: filmScanlinesCountSlider, glitchIntensitySlider: glitchIntensitySlider,
-                  fogNearValueSpan: fogNearValueSpan, fogFarValueSpan: fogFarValueSpan,
-                  ambientLightIntensityValueSpan: ambientLightIntensityValueSpan,
-                  bloomStrengthValueSpan: bloomStrengthValueSpan, bloomRadiusValueSpan: bloomRadiusValueSpan, bloomThresholdValueSpan: bloomThresholdValueSpan,
-                  filmNoiseValueSpan: filmNoiseValueSpan, filmScanlinesValueSpan: filmScanlinesValueSpan, filmScanlinesCountValueSpan: filmScanlinesCountValueSpan, glitchIntensityValueSpan: glitchIntensityValueSpan,
-                  blocker: document.getElementById('blocker'),
-                  instructions: document.getElementById('instructions'),
-                  flashOverlay: document.getElementById('flashOverlay')
-              };
-
-              for (const id in requiredElements) {
-                  if (requiredElements[id] === null) {
-                      console.error(`Error: Required HTML element with ID or variable name '${id}' not found or assigned. Please ensure the HTML structure is correct.`);
-                      // This is a critical error, potentially stop execution or disable features gracefully
-                  }
-              }
-         }
-
-
-        /**
-         * Sets up the Three.js scene and fog.
-         */
         function setupScene() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x111111); // Dark grey background
-            scene.fog = new THREE.Fog(
-                0x4d4d46, // Fog color
-                fogNearSlider ? parseFloat(fogNearSlider.value) : 50, // Initial Near distance
-                fogFarSlider ? parseFloat(fogFarSlider.value) : 250 // Initial Far distance
-            );
+            scene.background = new THREE.Color(0x111111);
+            scene.fog = new THREE.Fog(0x4d4d46, DEFAULT_FOG_NEAR, DEFAULT_FOG_FAR);
         }
 
-        /**
-         * Sets up the Three.js camera.
-         */
         function setupCamera() {
-            camera = new THREE.PerspectiveCamera(
-                65, window.innerWidth / window.innerHeight, 0.1,
-                Math.max(mazeSizeX, mazeSizeZ) * cellSize * 2 // Increased far plane slightly
-            );
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, Math.max(mazeSizeX, mazeSizeZ) * cellSize * 2);
             camera.position.y = floorLevel;
-            // Position camera near the center of the maze on the starting cell
-            camera.position.x = (mazeSizeX * cellSize) / 2 - cellSize / 2 + wallThickness * 2; // Adjust to be slightly off center initially
-            camera.position.z = (mazeSizeZ * cellSize) / 2 - cellSize / 2 + wallThickness * 2; // Adjust to be slightly off center initially
+            camera.position.x = (mazeSizeX * cellSize) / 2 - cellSize / 2 + wallThickness * 2;
+            camera.position.z = (mazeSizeZ * cellSize) / 2 - cellSize / 2 + wallThickness * 2;
         }
 
-        /**
-         * Sets up the Three.js renderer.
-         */
         function setupRenderer() {
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use PCFSoft for smoother shadows
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.body.appendChild(renderer.domElement);
         }
 
-        /**
-         * Sets up the Three.js post-processing effects.
-         */
         function setupPostProcessing() {
             composer = new EffectComposer(renderer);
-            // Apply render scale to the composer as well
             composer.setPixelRatio(window.devicePixelRatio * RENDER_SCALE);
             composer.setSize(window.innerWidth * RENDER_SCALE, window.innerHeight * RENDER_SCALE);
-
-
             const renderPass = new RenderPass(scene, camera);
             composer.addPass(renderPass);
-
-            // Bloom Pass
-            bloomPass = new UnrealBloomPass(
-                 // Use scaled resolution for the bloom effect
-                new THREE.Vector2(window.innerWidth * RENDER_SCALE, window.innerHeight * RENDER_SCALE),
-                bloomStrengthSlider ? parseFloat(bloomStrengthSlider.value) : BLOOM_STRENGTH,
-                bloomRadiusSlider ? parseFloat(bloomRadiusSlider.value) : BLOOM_RADIUS,
-                bloomThresholdSlider ? parseFloat(bloomThresholdSlider.value) : BLOOM_THRESHOLD
-            );
+            bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth * RENDER_SCALE, window.innerHeight * RENDER_SCALE), BLOOM_STRENGTH, BLOOM_RADIUS, BLOOM_THRESHOLD);
             composer.addPass(bloomPass);
-
-            // Film Pass (Scanlines & Noise)
-            filmPass = new FilmPass(
-                filmNoiseSlider ? parseFloat(filmNoiseSlider.value) : FILM_NOISE, // Noise intensity
-                filmScanlinesSlider ? parseFloat(filmScanlinesSlider.value) : FILM_SCANLINES_INTENSITY, // Scanline intensity
-                filmScanlinesCountSlider ? parseInt(filmScanlinesCountSlider.value) : FILM_SCANLINES_COUNT, // Scanline count
-                false // Grayscale (false)
-            );
+            filmPass = new FilmPass(FILM_NOISE, FILM_SCANLINES_INTENSITY, FILM_SCANLINES_COUNT, false);
             composer.addPass(filmPass);
-
-            // Glitch Pass
             glitchPass = new GlitchPass();
-            glitchPass.enabled = glitchIntensitySlider ? (parseFloat(glitchIntensitySlider.value) > 0) : false; // Initially enable based on slider
-            glitchPass.goWild = false; // Start with subtle glitches
+            glitchPass.enabled = GLITCH_INTENSITY > 0.005; 
+            glitchPass.goWild = false; 
             composer.addPass(glitchPass);
         }
 
-        /**
-         * Sets up the scene lighting (ambient and point lights).
-         */
         function setupLighting() {
-            ambientLight = new THREE.AmbientLight(0xffffff, ambientLightIntensitySlider ? parseFloat(ambientLightIntensitySlider.value) : 0.5);
+            ambientLight = new THREE.AmbientLight(0xffffff, DEFAULT_AMBIENT_LIGHT_INTENSITY);
             scene.add(ambientLight);
-
-            const lightColor = 0xffffff;
-            const lightIntensity = 1.5;
-            const lightDistance = cellSize * 2.0;
-            const lightDecay = 1.8;
-            const lightGridSpacingFactor = 2.0; // Place lights every 2 cells
-            const lightGridSizeX = Math.ceil(mazeSizeX / lightGridSpacingFactor);
-            const lightGridSizeZ = Math.ceil(mazeSizeZ / lightGridSpacingFactor);
-            const lightSpacingX = (mazeSizeX * cellSize) / lightGridSizeX;
-            const lightSpacingZ = (mazeSizeZ * cellSize) / lightGridSizeZ;
-             // Offset the light grid to center it relative to the maze offset
-            const lightGridOffsetX = (mazeSizeX * cellSize) / 2 - lightSpacingX / 2;
-            const lightGridOffsetZ = (mazeSizeZ * cellSize) / 2 - lightSpacingZ / 2;
-
-            lights.length = 0; // Clear the global lights array
-
+            const lightColor = 0xffffff; const lightIntensity = 1.5; const lightDistance = cellSize * 2.0; const lightDecay = 1.8;
+            const lightGridSpacingFactor = 2.0; const lightGridSizeX = Math.ceil(mazeSizeX / lightGridSpacingFactor); const lightGridSizeZ = Math.ceil(mazeSizeZ / lightGridSpacingFactor);
+            lights.length = 0;
             for (let i = 0; i < lightGridSizeX; i++) {
                 for (let j = 0; j < lightGridSizeZ; j++) {
-                    // Position lights at the center of the light grid cell
-                    const lightX = i * lightSpacingX + lightSpacingX / 2 - (mazeSizeX * cellSize) / 2;
-                    const lightZ = j * lightSpacingZ + lightSpacingZ / 2 - (mazeSizeZ * cellSize) / 2;
-                    const lightY = wallHeight - 5; // Place lights slightly below the ceiling
-
-                    const pointLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, lightDecay);
-                    pointLight.position.set(lightX, lightY, lightZ);
-
-                    // Decide which light casts shadows (e.g., a central one)
-                    const centerI = Math.floor(lightGridSizeX / 2);
-                    const centerJ = Math.floor(lightGridSizeZ / 2);
-
-                    // Only the central light casts shadows for performance
-                    if (i === centerI && j === centerJ) {
-                        pointLight.castShadow = true;
-                        pointLight.shadow.mapSize.width = 1024;
-                        pointLight.shadow.mapSize.height = 1024;
-                        pointLight.shadow.camera.near = 10;
-                        pointLight.shadow.camera.far = lightDistance * 1.5;
-                         // Adjust bias slightly to avoid shadow acne
-                         pointLight.shadow.bias = -0.001;
-                    } else {
-                         // Significantly reduce intensity or disable shadow for non-shadow casting lights
-                         // pointLight.intensity *= 0.2; // Option to dim non-shadow lights
-                         pointLight.castShadow = false;
-                    }
-
-                    scene.add(pointLight);
-                    lights.push({ light: pointLight, originalIntensity: lightIntensity, isFlickering: false, flickerEndTime: 0 });
-
-                    // Add light fixture mesh (can potentially be instanced too for further optimization)
-                    const lightFixture = new THREE.Mesh(lightFixtureGeometry, lightFixtureMaterial);
-                    lightFixture.position.set(lightX, wallHeight, lightZ); // Position at ceiling level
-                    scene.add(lightFixture);
+                    const lightX = i * (mazeSizeX * cellSize) / lightGridSizeX + ((mazeSizeX * cellSize) / lightGridSizeX) / 2 - (mazeSizeX * cellSize) / 2;
+                    const lightZ = j * (mazeSizeZ * cellSize) / lightGridSizeZ + ((mazeSizeZ * cellSize) / lightGridSizeZ) / 2 - (mazeSizeZ * cellSize) / 2;
+                    const lightY = wallHeight - 5; const pointLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, lightDecay); pointLight.position.set(lightX, lightY, lightZ);
+                    const centerI = Math.floor(lightGridSizeX / 2); const centerJ = Math.floor(lightGridSizeZ / 2);
+                    if (i === centerI && j === centerJ) { pointLight.castShadow = true; pointLight.shadow.mapSize.width = 1024; pointLight.shadow.mapSize.height = 1024; pointLight.shadow.camera.near = 10; pointLight.shadow.camera.far = lightDistance * 1.5; pointLight.shadow.bias = -0.001; }
+                    else { pointLight.castShadow = false; }
+                    scene.add(pointLight); lights.push({ light: pointLight, originalIntensity: lightIntensity, isFlickering: false, flickerEndTime: 0 });
+                    const lightFixture = new THREE.Mesh(lightFixtureGeometry, lightFixtureMaterial); lightFixture.position.set(lightX, wallHeight, lightZ); scene.add(lightFixture);
                 }
             }
             console.log(`Created ${lights.length} point lights.`);
         }
 
-
-        /**
-         * Sets up the entity mesh.
-         */
         function setupEntity() {
-             // entityMesh is already declared globally and uses the pre-defined entityGeometry and entityMaterial
             entityMesh = new THREE.Mesh(entityGeometry, entityMaterial);
             entityMesh.visible = false;
-            // entityMesh.castShadow = true; // Entity can cast shadows
             scene.add(entityMesh);
         }
 
-        /**
-         * Sets up pointer lock controls and related event listeners.
-         */
         function setupControls() {
             controls = new PointerLockControls(camera, document.body);
             const blocker = document.getElementById('blocker');
             const instructions = document.getElementById('instructions');
 
-            if (!blocker || !instructions) {
-                 console.error("Blocker or Instructions element not found, cannot set up controls interaction.");
-                 return;
-            }
+            if (!blocker || !instructions) { console.error("Blocker or Instructions element not found."); return; }
 
             instructions.addEventListener('click', async () => {
                 console.log("Instructions clicked. Attempting to start audio and lock pointer.");
-                // --- Tone.js Audio Start (Deferred) ---
                 if (typeof Tone !== 'undefined' && Tone.start) {
                     try {
                         if (Tone.context.state !== 'running') {
+                            console.log("Ctx state before Tone.start():", Tone.context.state);
                             await Tone.start();
-                            console.log('Audio context started/resumed');
+                            console.log('Audio ctx started/resumed. New state:', Tone.context.state);
                         }
-
-                        // Initialize audio nodes *after* context is running and *only once*
-                        if (!synth) {
-                            try {
-                                synth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
-                                console.log("Jump scare synth created successfully.");
-                            } catch (error) { console.error("Error creating jump scare synth:", error); synth = null; }
-                        }
-
-                        if (!noise && Tone.context.state === 'running') {
-                            console.log('Initializing ambient noise and buzzing...');
-                            try {
-                                noise = new Tone.Noise("pink").start();
-                                noiseVolume = new Tone.Volume(-22);
-                                autoFilter = new Tone.AutoFilter({ frequency: "4n", baseFrequency: 200, octaves: 4 }).start();
-                                tremolo = new Tone.Tremolo({ frequency: 2, depth: 0.08 }).start();
-                                reverb = new Tone.Reverb({ decay: 1.2, wet: 0.3 }).toDestination();
-                                noise.chain(noiseVolume, autoFilter, tremolo, reverb);
-
-                                buzzSynth = new Tone.Oscillator({ type: "sawtooth", frequency: 120, volume: -30 })
-                                    .chain(new Tone.Tremolo({ frequency: 8, depth: 0.1 }).start(), new Tone.Volume(-10))
-                                    .toDestination().start();
-                                console.log('Ambient noise and buzzing started.');
-                            } catch(audioError) {
-                                console.error("Error creating background audio:", audioError);
-                                // Clean up partial audio setup on error
-                                if (reverb) try { reverb.dispose(); } catch(e){} finally { reverb = null; }
-                                if (tremolo) try { tremolo.stop().dispose(); } catch(e){} finally { tremolo = null; }
-                                if (autoFilter) try { autoFilter.stop().dispose(); } catch(e){} finally { autoFilter = null; }
-                                if (noiseVolume) try { noiseVolume.dispose(); } catch(e){} finally { noiseVolume = null; }
-                                if (noise) try { noise.stop().dispose(); } catch(e){} finally { noise = null; }
-                                if (buzzSynth) try { buzzSynth.stop().dispose(); } catch(e){} finally { buzzSynth = null; }
+                        if (Tone.context.state === 'running') {
+                            if (Tone.Transport.state !== 'started') {
+                                Tone.Transport.start("+0.1");
+                                console.log('Tone.Transport explicitly started. State:', Tone.Transport.state);
                             }
-                        }
 
-                        // <<< Added: Initialize glitch sound synth
-                         if (!glitchSoundSynth && Tone.context.state === 'running') {
-                             try {
-                                 // Using a WhiteNoise source with a fast envelope and potentially a filter for a glitch effect
-                                 glitchSoundSynth = new Tone.NoiseSynth({
-                                     noise: { type: 'white' },
-                                     envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.05 } // Short, sharp envelope
-                                 }).chain(new Tone.Volume(-10), new Tone.Filter(8000, 'lowpass'), Tone.Destination); // <<< Adjusted: Volume
-                                 console.log("Glitch sound synth created successfully.");
-                             } catch (error) { console.error("Error creating glitch sound synth:", error); glitchSoundSynth = null; }
-                         }
-                         // Added End >>>
+                            if (!synth) { try { synth = new Tone.NoiseSynth({ volume: -15, noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination(); console.log("Jumpscare synth (noise) created."); } catch (e) { console.error("Error creating main jumpscare synth:", e); synth = null; }}
+                            if (!jumpScareThudSynth) { try { jumpScareThudSynth = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 8, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.6, sustain: 0.01, release: 0.5, attackCurve: 'exponential'}, volume: -3 }).toDestination(); console.log("Jumpscare thud synth created."); } catch (e) { console.error("Error creating thud synth:", e); jumpScareThudSynth = null; }}
+                            if (!noise) { try { noise = new Tone.Noise("pink"); noiseVolume = new Tone.Volume(-22); autoFilter = new Tone.AutoFilter({ frequency: 0.5, baseFrequency: 200, octaves: 2.5, depth: 0.7 }); /* MODIFIED FOR FILTER STABILITY */ tremolo = new Tone.Tremolo({ frequency: 2, depth: 0.08 }); reverb = new Tone.Reverb({ decay: 1.2, wet: 0.3 }).toDestination(); noise.chain(noiseVolume, autoFilter, tremolo, reverb); console.log('Ambient noise components created.'); } catch(e){ console.error("Error creating ambient noise chain:", e);}}
+                            if (!buzzSynth) { try { buzzSynth = new Tone.Oscillator({ type: "sawtooth", frequency: 120, volume: -30 }).chain(new Tone.Tremolo({ frequency: 8, depth: 0.1 }).start(), new Tone.Volume(-10)).toDestination(); console.log('Buzz synth created.'); } catch(e){ console.error("Error creating buzz synth:", e);}}
+                            if (!glitchSoundSynth) { try { glitchSoundSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.05 } }).chain(new Tone.Volume(-10), new Tone.Filter(8000, 'lowpass'), Tone.Destination); console.log("Glitch sound synth created."); } catch (e) { console.error("Error creating glitch sound synth:", e); }}
+                            if (!hummingSynth) { try { hummingSynth = new Tone.Oscillator({ type: 'sine', frequency: 60, volume: -40 }).toDestination(); console.log("Humming synth created."); } catch (e) { console.error("Error creating humming synth:", e); }}
+                            if (!chitteringSynth) { try { chitteringSynth = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).chain(new Tone.Volume(-5), new Tone.Filter(4000, 'highpass'), Tone.Destination); console.log("Chittering synth created."); } catch (e) { console.error("Error creating chittering synth:", e);}}
+                            if (!speechSynth) { try { speechSynth = new Tone.FMSynth({ harmonicity: 3.0, modulationIndex: 10, envelope: { attack: 0.01, decay: 0.2, sustain: 0.05, release: 0.5 }, modulation: { type: 'square' }, modulationEnvelope: { attack: 0.01, decay: 0.05, sustain: 0.0, release: 0.05 } }).chain(new Tone.Volume(-8), Tone.Destination); console.log("Speech synth created."); } catch (e) { console.error("Error creating speech synth:", e);}}
+                            if (!dejaVuSound) { try { dejaVuSound = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.3 } }).chain(new Tone.Volume(-15), new Tone.PingPongDelay(0.2, 0.5), Tone.Destination); console.log("Deja vu sound created."); } catch (e) { console.error("Error creating deja vu sound:", e);}}
+                            if (!cryingSound) { try { cryingSound = new Tone.AMSynth({ harmonicity: 0.5, oscillator: { type: 'sine' }, envelope: { attack: 1, decay: 2, sustain: 0.1, release: 3 }, modulation: { type: 'square' }, modulationEnvelope: { attack: 0.5, decay: 0, sustain: 1, release: 0.5 } }).chain(new Tone.Volume(-20), new Tone.Freeverb({ roomSize: 0.8, dampening: 5000 /* MODIFIED FOR FILTER STABILITY */ }).toDestination()); console.log("Crying synth created."); } catch (e) { console.error("Error creating crying synth:", e);}}
+                            if (!moaningSound) { try { moaningSound = new Tone.Synth({ oscillator: { type: 'sawtooth' }, envelope: { attack: 0.5, decay: 1, sustain: 0.2, release: 2 }, portamento: 0.5 }).chain(new Tone.Volume(-23), new Tone.FeedbackDelay(0.5, 0.5).toDestination()); console.log("Moaning synth created."); } catch (e) { console.error("Error creating moaning synth:", e);}}
+                            if (!laughterSound) { try { laughterSound = new Tone.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.1, release: 0.3 } }).chain(new Tone.Volume(-15), new Tone.Chebyshev(3 /* MODIFIED FOR FILTER STABILITY */).toDestination()); console.log("Laughter synth created."); } catch (e) { console.error("Error creating laughter synth:", e);}}
+                            if (!heartbeatSynth) { try { heartbeatSynth = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 6, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0.005, release: 0.1 }, volume: -12 }).toDestination(); console.log("Heartbeat synth created."); } catch (e) { console.error("Error creating heartbeat synth:", e);}}
 
-                         // <<< Added: Initialize new audio synths/players
-                          if (!hummingSynth && Tone.context.state === 'running') {
-                              try {
-                                   hummingSynth = new Tone.Oscillator({
-                                       type: 'sine', // Sine wave for a clean hum
-                                       frequency: 60, // Typical fluorescent hum frequency
-                                       volume: -40 // Start quiet
-                                   }).toDestination().start();
-                                   console.log("Humming synth created successfully.");
-                              } catch (error) { console.error("Error creating humming synth:", error); hummingSynth = null; }
-                          }
+                        } else { console.error("AudioContext not running after Tone.start(). State:", Tone.context.state); alert("Audio could not be enabled."); return; }
+                    } catch (error) { console.error("Error during audio setup:", error); alert("Audio setup error."); return; }
+                } else { console.warn("Tone.js not loaded."); alert("Audio library missing."); return; }
 
-                          if (!chitteringSynth && Tone.context.state === 'running') {
-                              try {
-                                   // Using a NoiseSynth with a short envelope and filter for chittering
-                                   // Corrected: Replaced MultiOscillator with NoiseSynth
-                                   chitteringSynth = new Tone.NoiseSynth({
-                                       noise: { type: 'pink' }, // Pink noise for a slightly darker texture
-                                       envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } // Short, percussive envelope
-                                   }).chain(new Tone.Volume(-5), new Tone.Filter(4000, 'highpass'), Tone.Destination); // <<< Adjusted: Volume and Filter
-                                   console.log("Chittering synth created successfully.");
-                              } catch (error) { console.error("Error creating chittering synth:", error); chitteringSynth = null; }
-                          }
-
-                           if (!speechSynth && Tone.context.state === 'running') {
-                               try {
-                                   // Using a simple FM synth for abstract speech-like sounds
-                                   speechSynth = new Tone.FMSynth({
-                                       harmonicity: 3.0,
-                                       modulationIndex: 10,
-                                       envelope: {
-                                           attack: 0.01,
-                                           decay: 0.2,
-                                           sustain: 0.05,
-                                           release: 0.5
-                                       },
-                                       modulation: {
-                                           type: 'square'
-                                       },
-                                       modulationEnvelope: {
-                                           attack: 0.01,
-                                           decay: 0.05,
-                                           sustain: 0.0,
-                                           release: 0.05
-                                       }
-                                   }).chain(new Tone.Volume(-8), Tone.Destination); // <<< Adjusted: Volume
-                                   console.log("Speech synth created successfully.");
-                               } catch (error) { console.error("Error creating speech synth:", error); speechSynth = null; }
-                           }
-
-                           if (!dejaVuSound && Tone.context.state === 'running') {
-                               try {
-                                   // Using a short noise burst with effects for deja vu
-                                   dejaVuSound = new Tone.NoiseSynth({
-                                       noise: { type: 'pink' },
-                                       envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.3 }
-                                   }).chain(new Tone.Volume(-15), new Tone.PingPongDelay(0.2, 0.5), Tone.Destination); // <<< Adjusted: Volume
-                                   console.log("Deja vu sound created successfully.");
-                               } catch (error) { console.error("Error creating deja vu sound:", error); dejaVuSound = null; }
-                           }
-
-                           // <<< Added: Initialize crying, moaning, and laughter synths
-                           if (!cryingSound && Tone.context.state === 'running') {
-                               try {
-                                   // Using a simple AMSynth with vibrato for a wavering, distant sound
-                                   cryingSound = new Tone.AMSynth({ // Corrected: AMSynth uses uppercase 'S'
-                                       harmonicity: 0.5, // Lower harmonicity for a less musical tone
-                                       oscillator: { type: 'sine' },
-                                       envelope: { attack: 1, decay: 2, sustain: 0.1, release: 3 }, // Slow attack and long release
-                                       modulation: { type: 'square' },
-                                       modulationEnvelope: { attack: 0.5, decay: 0, sustain: 1, release: 0.5 }
-                                   }).chain(new Tone.Volume(-20), new Tone.Freeverb({ roomSize: 0.8, dampening: 20000 }).toDestination()); // <<< Adjusted: Volume
-                                   console.log("Crying synth created successfully.");
-                               } catch (error) { console.error("Error creating crying synth:", error); cryingSound = null; }
-                           }
-
-                           if (!moaningSound && Tone.context.state === 'running') {
-                               try {
-                                   // Using a simple Synth with portamento for sliding tones
-                                   moaningSound = new Tone.Synth({
-                                       oscillator: { type: 'sawtooth' },
-                                       envelope: { attack: 0.5, decay: 1, sustain: 0.2, release: 2 },
-                                       portamento: 0.5 // Smooth sliding between notes
-                                   }).chain(new Tone.Volume(-23), new Tone.FeedbackDelay(0.5, 0.5).toDestination()); // <<< Adjusted: Volume
-                                   console.log("Moaning synth created successfully.");
-                               } catch (error) { console.error("Error creating moaning synth:", error); moaningSound = null; }
-                           }
-
-                           if (!laughterSound && Tone.context.state === 'running') {
-                               try {
-                                   // Using a NoiseSynth with a rhythmic envelope for abstract laughter
-                                   laughterSound = new Tone.NoiseSynth({
-                                       noise: { type: 'brown' }, // Brownian noise for a warmer texture
-                                       envelope: { attack: 0.05, decay: 0.2, sustain: 0.1, release: 0.3 } // Short, choppy envelope
-                                   }).chain(new Tone.Volume(-15), new Tone.Chebyshev(50).toDestination()); // <<< Adjusted: Volume
-                                   console.log("Laughter synth created successfully.");
-                               } catch (error) { console.error("Error creating laughter synth:", error); laughterSound = null; }
-                           }
-                           // Added End >>>
-
-
-                    } catch (error) { console.error("Error starting Tone.js audio context:", error); }
-                } else { console.warn("Tone.js not loaded or Tone.start not available, cannot start audio context."); }
-
-                console.log("Calling controls.lock()...");
-                controls.lock();
-                console.log("controls.lock() called. Current controls.isLocked:", controls.isLocked);
-
-                // <<< Added: Clear demo timer and disable demo mode on user click
-                clearTimeout(demoTimer);
-                isDemoMode = false;
-                // Added End >>>
-
-
-                setTimeout(() => {
-                     console.log("Checking controls.isLocked after short delay:", controls.isLocked);
-                     if (!controls.isLocked) {
-                         console.warn("Pointer lock failed or was denied by the browser.");
-                         // Potentially show a message to the user about enabling pointer lock
-                     }
-                }, 100);
+                controls.lock(); clearTimeout(demoTimer); isDemoMode = false;
             });
 
             controls.addEventListener('lock', () => {
-                console.log("Pointer lock acquired.");
-                instructions.style.display = 'none';
-                blocker.style.display = 'none';
-                if (menuElement) menuElement.style.display = 'none';
-                // Start audio only if it was successfully initialized
-                if (noise && noise.state !== 'started') try { noise.start(); } catch(e){ console.error("Error starting noise:", e);}
-                if (buzzSynth && buzzSynth.state !== 'started') try { buzzSynth.start(); } catch(e){ console.error("Error starting buzzSynth:", e);}
-                 // <<< Added: Start glitch sound synth source (it won't make sound until triggered)
-                 if (glitchSoundSynth && glitchSoundSynth.state !== 'started') try { glitchSoundSynth.noise.start(); } catch(e){ console.error("Error starting glitch sound synth noise:", e);}
-                 // Added End >>>
-                 // <<< Added: Start new audio synths/players sources
-                  if (hummingSynth && hummingSynth.state !== 'started') try { hummingSynth.start(); } catch(e){ console.error("Error starting humming synth:", e);}
-                  if (chitteringSynth && chitteringSynth.state !== 'started') try { chitteringSynth.noise.start(); } catch(e){ console.error("Error starting chittering synth noise:", e);} // NoiseSynths need their noise source started
-                  // Speech synth and Deja vu sound are triggered, not continuously started
-                  // Crying, Moaning, Laughter sounds are triggered, not continuously started
-                 // Added End >>>
+                console.log("Pointer lock acquired. controls.isLocked:", controls.isLocked);
+                instructions.style.display = 'none'; blocker.style.display = 'none';
+                if (Tone.context.state === 'running') {
+                    console.log("Audio context running, starting continuous sounds...");
+                    if (noise && noise.state !== 'started') try { noise.start(); console.log("Noise started.");} catch(e){ console.error("Error starting noise:", e);}
+                    if (autoFilter && autoFilter.state !== 'started') try { autoFilter.start(); console.log("AutoFilter started.");} catch(e){ console.error("Error starting autoFilter:", e);}
+                    if (tremolo && tremolo.state !== 'started') try { tremolo.start(); console.log("Tremolo started.");} catch(e){ console.error("Error starting tremolo:", e);}
+                    if (buzzSynth && buzzSynth.state !== 'started') try { buzzSynth.start(); console.log("BuzzSynth started.");} catch(e){ console.error("Error starting buzzSynth:", e);}
+                    if (glitchSoundSynth && glitchSoundSynth.noise && glitchSoundSynth.noise.state !== 'started') try { glitchSoundSynth.noise.start(); console.log("Glitch noise started.");} catch(e){ console.error("Error starting glitch noise:", e);}
+                    if (hummingSynth && hummingSynth.state !== 'started') try { hummingSynth.start(); console.log("Humming started.");} catch(e){ console.error("Error starting humming:", e);}
+                    if (chitteringSynth && chitteringSynth.noise && chitteringSynth.noise.state !== 'started') try { chitteringSynth.noise.start(); console.log("Chittering noise started.");} catch(e){ console.error("Error starting chittering noise:", e);}
+                } else { console.warn("AudioContext not running on lock event."); }
             });
 
             controls.addEventListener('unlock', () => {
-                console.log("Pointer lock lost.");
-                blocker.style.display = 'flex';
-                instructions.style.display = '';
-                if (menuElement) menuElement.style.display = 'none';
-                // Stop and dispose background audio when unlocked
-                 if (reverb) { try { reverb.dispose(); console.log("Reverb disposed."); } catch (e) { console.error("Error disposing reverb:", e); } finally { reverb = null; } }
-                 if (tremolo) { try { tremolo.stop().dispose(); console.log("Tremolo stopped/disposed."); } catch (e) { console.error("Error stopping tremolo:", e); } finally { tremolo = null; } }
-                 if (autoFilter) { try { autoFilter.stop().dispose(); console.log("AutoFilter stopped/disposed."); } catch (e) { console.error("Error stopping autoFilter:", e); } finally { autoFilter = null; } }
-                 if (noiseVolume) { try { noiseVolume.dispose(); console.log("Noise Volume disposed."); } catch (e) { console.error("Error disposing noise volume:", e); } finally { noiseVolume = null; } }
-                 if (noise) { try { noise.stop().dispose(); console.log("Noise stopped/disposed."); } catch (e) { console.error("Error stopping noise:", e); } finally { noise = null; } }
-                 if (buzzSynth) { try { buzzSynth.stop().dispose(); console.log("Buzz synth stopped/disposed."); } catch (e) { console.error("Error stopping buzz synth:", e); } finally { buzzSynth = null; } }
-                 // <<< Added: Stop and dispose glitch sound synth
-                 if (glitchSoundSynth) { try { glitchSoundSynth.noise.stop().dispose(); glitchSoundSynth.dispose(); console.log("Glitch sound synth stopped/disposed."); } catch (e) { console.error("Error stopping glitch sound synth:", e); } finally { glitchSoundSynth = null; } }
-                 // Added End >>>
-                 // <<< Added: Stop and dispose new audio synths/players
-                  if (hummingSynth) { try { hummingSynth.stop().dispose(); console.log("Humming synth stopped/disposed."); } catch (e) { console.error("Error stopping humming synth:", e); } finally { hummingSynth = null; } }
-                  if (chitteringSynth) { try { chitteringSynth.noise.stop().dispose(); chitteringSynth.dispose(); console.log("Chittering synth stopped/disposed."); } catch (e) { console.error("Error stopping chittering synth:", e); } finally { chitteringSynth = null; } }
-                  if (speechSynth) { try { speechSynth.dispose(); console.log("Speech synth disposed."); } catch (e) { console.error("Error disposing speech synth:", e); } finally { speechSynth = null; } }
-                  if (dejaVuSound) { try { dejaVuSound.dispose(); console.log("Deja vu sound disposed."); } catch (e) { console.error("Error disposing deja vu sound:", e); } finally { dejaVuSound = null; } }
-                  // <<< Added: Stop and dispose crying, moaning, and laughter synths
-                  if (cryingSound) { try { cryingSound.dispose(); console.log("Crying synth disposed."); } catch (e) { console.error("Error disposing crying synth:", e); } finally { cryingSound = null; } }
-                  if (moaningSound) { try { moaningSound.dispose(); console.log("Moaning synth disposed."); } catch (e) { console.error("Error disposing moaning synth:", e); } finally { moaningSound = null; } }
-                  if (laughterSound) { try { laughterSound.dispose(); console.log("Laughter synth disposed."); } catch (e) { console.error("Error disposing laughter synth:", e); } finally { laughterSound = null; } }
-                  // Added End >>>
-                 // Added End >>>
-                 // <<< Added: If unlocked, stop demo mode
-                 isDemoMode = false;
-                 // Added End >>>
+                console.log("Pointer lock lost. Disposing audio...");
+                blocker.style.display = 'flex'; instructions.style.display = '';
+                const toDispose = [
+                    reverb, tremolo, autoFilter, noiseVolume, noise, buzzSynth, 
+                    glitchSoundSynth, hummingSynth, chitteringSynth, speechSynth, 
+                    dejaVuSound, cryingSound, moaningSound, laughterSound, 
+                    heartbeatSynth, synth, jumpScareThudSynth
+                ];
+                toDispose.forEach(item => {
+                    if (item) {
+                        try {
+                            if (item.noise && typeof item.noise.stop === 'function') item.noise.stop();
+                            if (typeof item.stop === 'function') item.stop();
+                            if (typeof item.dispose === 'function') item.dispose();
+                        } catch (e) { console.error("Error during dispose:", e, item); }
+                    }
+                });
+                reverb=null; tremolo=null; autoFilter=null; noiseVolume=null; noise=null; buzzSynth=null; 
+                glitchSoundSynth=null; hummingSynth=null; chitteringSynth=null; speechSynth=null; 
+                dejaVuSound=null; cryingSound=null; moaningSound=null; laughterSound=null; 
+                heartbeatSynth=null; synth=null; jumpScareThudSynth=null;
+                console.log("All audio resources nulled.");
+                isDemoMode = false;
             });
-
             scene.add(controls.getObject());
         }
 
-        /**
-         * Adds event listeners to the menu sliders.
-         */
-        function addSliderEventListeners() {
-             if (fogNearSlider) fogNearSlider.addEventListener('input', updateSettings);
-             if (fogFarSlider) fogFarSlider.addEventListener('input', updateSettings);
-             if (ambientLightIntensitySlider) ambientLightIntensitySlider.addEventListener('input', updateSettings);
-             if (bloomStrengthSlider) bloomStrengthSlider.addEventListener('input', updateSettings);
-             if (bloomRadiusSlider) bloomRadiusSlider.addEventListener('input', updateSettings);
-             if (bloomThresholdSlider) bloomThresholdSlider.addEventListener('input', updateSettings);
-             if (filmNoiseSlider) filmNoiseSlider.addEventListener('input', updateSettings);
-             if (filmScanlinesSlider) filmScanlinesSlider.addEventListener('input', updateSettings);
-             if (filmScanlinesCountSlider) filmScanlinesCountSlider.addEventListener('input', updateSettings);
-             if (glitchIntensitySlider) glitchIntensitySlider.addEventListener('input', updateSettings);
-        }
-
-
-        /**
-         * Creates the base floor and ceiling meshes and adds them to the scene.
-         */
-        function createBaseGeometry() {
+        function createBaseGeometry() { 
             const floorSize = Math.max(mazeSizeX, mazeSizeZ) * cellSize * 1.5;
-
             const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
             floorGeometry.rotateX(- Math.PI / 2);
             const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-            floor.receiveShadow = true; // Floor receives shadows
+            floor.receiveShadow = true;
             scene.add(floor);
-
+            
             const ceilingGeometry = new THREE.PlaneGeometry(floorSize, floorSize);
             ceilingGeometry.rotateX(Math.PI / 2);
-            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial); // Uses the new textured material
             ceiling.position.y = wallHeight;
+
+            // CEILING TILE PATTERN: Set texture repeat based on ceiling size and desired tile density
+            const tilesPerWorldUnit = 0.02; // Adjust this to change tile size (smaller value = larger tiles)
+            ceilingTexture.repeat.set(floorSize * tilesPerWorldUnit, floorSize * tilesPerWorldUnit);
+            
             scene.add(ceiling);
         }
+        function createWallData(width, height, depth, x, y, z) { wallInstancesData.push({ position: new THREE.Vector3(x, y + height / 2, z), scale: new THREE.Vector3(width, height, depth) }); }
+        function createFurnitureData(width, height, depth, x, y, z) { furnitureInstancesData.push({ position: new THREE.Vector3(x, floorLevel + height / 2, z), scale: new THREE.Vector3(width, height, depth) }); }
+        function createDoorwayData(x, z, rotationY) { doorwayInstancesData.push({ position: new THREE.Vector3(x, floorLevel + wallHeight / 2, z), rotationY: rotationY }); }
+        function generateMazeLayout(gridSizeX, gridSizeZ, size) { const grid = []; const stack = []; const totalCells = gridSizeX * gridSizeZ; let visitedCells = 0; for (let x = 0; x < gridSizeX; x++) { grid[x] = []; for (let z = 0; z < gridSizeZ; z++) { grid[x][z] = { visited: false, walls: { north: true, east: true, south: true, west: true }, x: x, z: z }; } } let currentX = Math.floor(Math.random() * gridSizeX); let currentZ = Math.floor(Math.random() * gridSizeZ); grid[currentX][currentZ].visited = true; visitedCells++; stack.push(grid[currentX][currentZ]); while (visitedCells < totalCells && stack.length > 0) { const currentCell = stack[stack.length - 1]; currentX = currentCell.x; currentZ = currentCell.z; const neighbors = []; if (currentZ > 0 && !grid[currentX][currentZ - 1].visited) neighbors.push(grid[currentX][currentZ - 1]); if (currentX < gridSizeX - 1 && !grid[currentX + 1][currentZ].visited) neighbors.push(grid[currentX + 1][currentZ]); if (currentZ < gridSizeZ - 1 && !grid[currentX][currentZ + 1].visited) neighbors.push(grid[currentX][currentZ + 1]); if (currentX > 0 && !grid[currentX - 1][currentZ].visited) neighbors.push(grid[currentX - 1][currentZ]); if (neighbors.length > 0) { const nextCell = neighbors[Math.floor(Math.random() * neighbors.length)]; if (nextCell.z < currentCell.z) { currentCell.walls.north = false; nextCell.walls.south = false; } else if (nextCell.x > currentCell.x) { currentCell.walls.east = false; nextCell.walls.west = false; } else if (nextCell.z > currentCell.z) { currentCell.walls.south = false; nextCell.walls.north = false; } else if (nextCell.x < currentCell.x) { currentCell.walls.west = false; nextCell.walls.east = false; } nextCell.visited = true; visitedCells++; stack.push(nextCell); } else { stack.pop(); } } const halfSize = size / 2; const mazeOffsetX = -(gridSizeX * size) / 2; const mazeOffsetZ = -(gridSizeZ * size) / 2; for (let x = 0; x < gridSizeX; x++) { for (let z = 0; z < gridSizeZ; z++) { const cell = grid[x][z]; const worldX = x * size + mazeOffsetX; const worldZ = z * size + mazeOffsetZ; if (cell.walls.north) { if (Math.random() > DOORWAY_CHANCE) { createWallData(size + wallThickness, wallHeight, wallThickness, worldX + halfSize, 0, worldZ - wallThickness / 2); } else { createDoorwayData(worldX + halfSize, worldZ - wallThickness / 2, 0); } } if (cell.walls.east) { if (Math.random() > DOORWAY_CHANCE) { createWallData(wallThickness, wallHeight, size + wallThickness, worldX + size + wallThickness / 2, 0, worldZ + halfSize); } else { createDoorwayData(worldX + size + wallThickness / 2, worldZ + halfSize, Math.PI / 2); } } if (cell.walls.south) { if (Math.random() > DOORWAY_CHANCE) { createWallData(size + wallThickness, wallHeight, wallThickness, worldX + halfSize, 0, worldZ + size + wallThickness / 2); } else { createDoorwayData(worldX + halfSize, worldZ + size + wallThickness / 2, 0); } } if (cell.walls.west) { if (Math.random() > DOORWAY_CHANCE) { createWallData(wallThickness, wallHeight, size + wallThickness, worldX - wallThickness / 2, 0, worldZ + halfSize); } else { createDoorwayData(worldX - wallThickness / 2, worldZ + halfSize, Math.PI / 2); } } const openPassages = (!cell.walls.north?1:0)+(!cell.walls.east?1:0)+(!cell.walls.south?1:0)+(!cell.walls.west?1:0); const isStartingCell = (x === Math.floor(mazeSizeX/2) && z === Math.floor(mazeSizeZ/2)); if(openPassages <= 1 && !isStartingCell && Math.random() < 0.5){ const furnitureCount=Math.floor(THREE.MathUtils.randFloat(1,3)); for(let i=0;i<furnitureCount;i++){ const fX=worldX+THREE.MathUtils.randFloat(wallThickness*2,size-wallThickness*2); const fZ=worldZ+THREE.MathUtils.randFloat(wallThickness*2,size-wallThickness*2); const fH=THREE.MathUtils.randFloat(15,40); const fW=THREE.MathUtils.randFloat(20,50); const fD=THREE.MathUtils.randFloat(20,50); createFurnitureData(fW,fH,fD,fX,0,fZ);}}}}}
+        function createInstancedMeshes() { if(wallInstancesData.length > 0){const dummy=new THREE.Object3D();wallInstanceMesh=new THREE.InstancedMesh(wallGeometry,wallMaterial,wallInstancesData.length);for(let i=0;i<wallInstancesData.length;i++){const inst=wallInstancesData[i];dummy.position.copy(inst.position);dummy.scale.copy(inst.scale);dummy.updateMatrixWorld(true);wallInstanceMesh.setMatrixAt(i,dummy.matrixWorld);}wallInstanceMesh.instanceMatrix.needsUpdate=true;wallInstanceMesh.castShadow=true;wallInstanceMesh.receiveShadow=true;scene.add(wallInstanceMesh);console.log(`Added ${wallInstancesData.length} wall instances.`);}else{console.warn("No wall data.");} if(furnitureInstancesData.length > 0){const dummy=new THREE.Object3D();furnitureInstanceMesh=new THREE.InstancedMesh(furnitureBaseGeometry,furnitureMaterial,furnitureInstancesData.length);for(let i=0;i<furnitureInstancesData.length;i++){const inst=furnitureInstancesData[i];dummy.position.copy(inst.position);dummy.scale.copy(inst.scale);dummy.updateMatrixWorld(true);furnitureInstanceMesh.setMatrixAt(i,dummy.matrixWorld);}furnitureInstanceMesh.instanceMatrix.needsUpdate=true;furnitureInstanceMesh.castShadow=true;furnitureInstanceMesh.receiveShadow=true;scene.add(furnitureInstanceMesh);console.log(`Added ${furnitureInstancesData.length} furniture instances.`);}else{console.warn("No furniture data.");} wallInstancesData.length = 0; furnitureInstancesData.length = 0;}
+        function onWindowResize() { const width = window.innerWidth; const height = window.innerHeight; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height); composer.setSize(width * RENDER_SCALE, height * RENDER_SCALE); if (bloomPass instanceof UnrealBloomPass) { bloomPass.resolution.set(width * RENDER_SCALE, height * RENDER_SCALE); }}
+        function startDemoTimer() { demoTimer = setTimeout(() => { if (!controls.isLocked) { console.log("Demo starting."); isDemoMode = true; const b = document.getElementById('blocker'); const i = document.getElementById('instructions'); if (b) b.style.display = 'none'; if (i) i.style.display = 'none'; timeSinceLastDemoTurn = 0; } }, demoDelay); console.log(`Demo timer for ${demoDelay/1000}s.`);}
 
-
-        /**
-         * Stores wall data for instancing.
-         * @param {number} width - The width of the wall segment.
-         * @param {number} height - The height of the wall segment.
-         * @param {number} depth - The depth (thickness) of the wall segment.
-         * @param {number} x - The x-position of the wall segment.
-         * @param {number} y - The y-position of the wall segment (base).
-         * @param {number} z - The z-position of the wall segment.
-         */
-        function createWallData(width, height, depth, x, y, z) {
-            wallInstancesData.push({
-                position: new THREE.Vector3(x, y + height / 2, z), // Position is centered vertically
-                scale: new THREE.Vector3(width, height, depth)
-                // Rotation could be added here if walls weren't axis-aligned
-            });
-        }
-
-         /**
-          * Stores furniture data for instancing.
-          * @param {number} width - The width of the furniture.
-          * @param {number} height - The height of the furniture.
-          * @param {number} depth - The depth of the furniture.
-          * @param {number} x - The x-position of the furniture.
-          * @param {number} y - The y-position of the furniture (base).
-          * @param {number} z - The z-position of the furniture.
-          */
-         function createFurnitureData(width, height, depth, x, y, z) {
-              furnitureInstancesData.push({
-                  position: new THREE.Vector3(x, floorLevel + height / 2, z), // Position on floor, centered vertically
-                  scale: new THREE.Vector3(width, height, depth)
-                  // Rotation could be added here
-              });
-         }
-
-         /**
-          * Stores doorway data for instancing (currently just marks the location).
-          * @param {number} x - The x-position of the doorway center.
-          * @param {number} z - The z-position of the doorway center.
-          * @param {number} rotationY - The rotation around the Y axis (0 or PI/2).
-          */
-         function createDoorwayData(x, z, rotationY) {
-             doorwayInstancesData.push({
-                 position: new THREE.Vector3(x, floorLevel + wallHeight / 2, z), // Position centered vertically
-                 rotationY: rotationY // Store rotation for potential future geometry
-             });
-         }
-
-
-        /**
-         * Maze Generation Logic (Randomized DFS).
-         * Populates wallInstancesData, furnitureInstancesData, and doorwayInstancesData.
-         */
-        function generateMazeLayout(gridSizeX, gridSizeZ, size) {
-            const grid = [];
-            const stack = [];
-            const totalCells = gridSizeX * gridSizeZ;
-            let visitedCells = 0;
-
-            // Initialize grid with walls
-            for (let x = 0; x < gridSizeX; x++) {
-                grid[x] = [];
-                for (let z = 0; z < gridSizeZ; z++) {
-                    grid[x][z] = { visited: false, walls: { north: true, east: true, south: true, west: true }, x: x, z: z };
-                }
-            }
-
-            // Start DFS from a random cell (or a fixed start)
-            let currentX = Math.floor(Math.random() * gridSizeX);
-            let currentZ = Math.floor(Math.random() * gridSizeZ);
-             // Or a fixed start:
-             // let currentX = Math.floor(gridSizeX / 2);
-             // let currentZ = Math.floor(gridSizeZ / 2);
-
-            grid[currentX][currentZ].visited = true;
-            visitedCells++;
-            stack.push(grid[currentX][currentZ]);
-
-            // DFS loop
-            while (visitedCells < totalCells && stack.length > 0) {
-                const currentCell = stack[stack.length - 1];
-                currentX = currentCell.x;
-                currentZ = currentCell.z;
-
-                const neighbors = [];
-
-                // Check unvisited neighbors
-                if (currentZ > 0 && !grid[currentX][currentZ - 1].visited) neighbors.push(grid[currentX][currentZ - 1]); // North
-                if (currentX < gridSizeX - 1 && !grid[currentX + 1][currentZ].visited) neighbors.push(grid[currentX + 1][currentZ]); // East
-                if (currentZ < gridSizeZ - 1 && !grid[currentX][currentZ + 1].visited) neighbors.push(grid[currentX][currentZ + 1]); // South
-                if (currentX > 0 && !grid[currentX - 1][currentZ].visited) neighbors.push(grid[currentX - 1][currentZ]); // West
-
-                if (neighbors.length > 0) {
-                    // Choose a random unvisited neighbor
-                    const nextCell = neighbors[Math.floor(Math.random() * neighbors.length)];
-
-                    // Remove walls between current cell and chosen neighbor
-                    if (nextCell.z < currentCell.z) { // Moving North
-                        currentCell.walls.north = false;
-                        nextCell.walls.south = false;
-                    } else if (nextCell.x > currentCell.x) { // Moving East
-                        currentCell.walls.east = false;
-                        nextCell.walls.west = false;
-                    } else if (nextCell.z > currentCell.z) { // Moving South
-                        currentCell.walls.south = false;
-                        nextCell.walls.north = false;
-                    } else if (nextCell.x < currentCell.x) { // Moving West
-                        currentCell.walls.west = false;
-                        nextCell.walls.east = false;
-                    }
-
-                    // Mark neighbor as visited and push to stack
-                    nextCell.visited = true;
-                    visitedCells++;
-                    stack.push(nextCell);
-                } else {
-                    // No unvisited neighbors, backtrack
-                    stack.pop();
-                }
-            }
-
-            // --- Add Wall Data and Doorway Data to the instancesData Arrays ---
-            const halfSize = size / 2;
-            const mazeOffsetX = -(gridSizeX * size) / 2;
-            const mazeOffsetZ = -(gridSizeZ * size) / 2;
-
-            for (let x = 0; x < gridSizeX; x++) {
-                for (let z = 0; z < gridSizeZ; z++) {
-                    const cell = grid[x][z];
-                    const worldX = x * size + mazeOffsetX;
-                    const worldZ = z * size + mazeOffsetZ;
-
-                    // Add data for walls that were NOT removed
-                    // Check if the passage should be a doorway instead of a full wall
-                    if (cell.walls.north) {
-                        if (Math.random() > DOORWAY_CHANCE) { // Create a wall segment
-                             createWallData(size + wallThickness, wallHeight, wallThickness, worldX + halfSize, 0, worldZ - wallThickness / 2);
-                        } else { // Create a doorway (just a gap for now)
-                             createDoorwayData(worldX + halfSize, worldZ - wallThickness / 2, 0); // Store doorway location and orientation
-                        }
-                    }
-                    if (cell.walls.east) {
-                        if (Math.random() > DOORWAY_CHANCE) { // Create a wall segment
-                             createWallData(wallThickness, wallHeight, size + wallThickness, worldX + size + wallThickness / 2, 0, worldZ + halfSize);
-                        } else { // Create a doorway (just a gap for now)
-                             createDoorwayData(worldX + size + wallThickness / 2, worldZ + halfSize, Math.PI / 2); // Store doorway location and orientation
-                        }
-                    }
-                    if (cell.walls.south) {
-                        if (Math.random() > DOORWAY_CHANCE) { // Create a wall segment
-                             createWallData(size + wallThickness, wallHeight, wallThickness, worldX + halfSize, 0, worldZ + size + wallThickness / 2);
-                        } else { // Create a doorway (just a gap for now)
-                             createDoorwayData(worldX + halfSize, worldZ + size + wallThickness / 2, 0); // Store doorway location and orientation
-                        }
-                    }
-                    if (cell.walls.west) {
-                         if (Math.random() > DOORWAY_CHANCE) { // Create a wall segment
-                             createWallData(wallThickness, wallHeight, size + wallThickness, worldX - wallThickness / 2, 0, worldZ + halfSize);
-                         } else { // Create a doorway (just a gap for now)
-                              createDoorwayData(worldX - wallThickness / 2, worldZ + halfSize, Math.PI / 2); // Store doorway location and orientation
-                         }
-                    }
-
-
-                    // Furniture in Dead Ends (cells with only 1 open passage)
-                     const openPassages = (!cell.walls.north ? 1 : 0) + (!cell.walls.east ? 1 : 0) + (!cell.walls.south ? 1 : 0) + (!cell.walls.west ? 1 : 0);
-                     const isStartingCell = (x === Math.floor(mazeSizeX/2) && z === Math.floor(mazeSizeZ/2)); // Avoid putting furniture right at the start
-                     if (openPassages <= 1 && !isStartingCell && Math.random() < 0.5) { // Increased chance slightly, also in corners
-                         const furnitureCount = Math.floor(THREE.MathUtils.randFloat(1, 3)); // Fewer furniture items per spot
-                         for(let i = 0; i < furnitureCount; i++) {
-                              // Place furniture randomly within the cell, avoiding edges
-                              const furnitureX = worldX + THREE.MathUtils.randFloat(wallThickness * 2, size - wallThickness * 2);
-                              const furnitureZ = worldZ + THREE.MathUtils.randFloat(wallThickness * 2, size - wallThickness * 2);
-                              const furnitureHeight = THREE.MathUtils.randFloat(15, 40); // Taller furniture
-                              const furnitureWidth = THREE.MathUtils.randFloat(20, 50); // Wider furniture
-                              const furnitureDepth = THREE.MathUtils.randFloat(20, 50); // Deeper furniture
-                              createFurnitureData(furnitureWidth, furnitureHeight, furnitureDepth, furnitureX, 0, furnitureZ);
-                          }
-                     }
-                }
-            }
-             console.log(`Maze layout generated. Collected ${wallInstancesData.length} wall instances, ${furnitureInstancesData.length} furniture instances, and ${doorwayInstancesData.length} doorway instances.`);
-        }
-
-        /**
-         * Creates InstancedMesh objects from the collected data and adds them to the scene.
-         * Currently only creates instanced meshes for walls and furniture.
-         * Doorways are represented by the absence of wall segments.
-         */
-        function createInstancedMeshes() {
-            // Create InstancedMesh for Walls
-            if (wallInstancesData.length > 0) {
-                wallInstanceMesh = new THREE.InstancedMesh(wallGeometry, wallMaterial, wallInstancesData.length);
-                const matrix = new THREE.Matrix4();
-                const dummy = new THREE.Object3D(); // A temporary Object3D to help build the transformation matrix
-
-                for (let i = 0; i < wallInstancesData.length; i++) {
-                    const instance = wallInstancesData[i];
-                    dummy.position.copy(instance.position);
-                    dummy.scale.copy(instance.scale);
-                    // dummy.rotation.set(0, instance.rotationY || 0, 0); // If you had rotation data
-                    dummy.updateMatrixWorld(true); // Update the dummy's matrix
-
-                    wallInstanceMesh.setMatrixAt(i, dummy.matrixWorld); // Set the transformation matrix for this instance
-                }
-
-                wallInstanceMesh.instanceMatrix.needsUpdate = true; // Inform Three.js that the instance matrices need to be uploaded to the GPU
-                wallInstanceMesh.castShadow = true; // Instanced meshes can cast shadows
-                wallInstanceMesh.receiveShadow = true; // Instanced meshes can receive shadows
-                scene.add(wallInstanceMesh);
-                console.log(`Added InstancedMesh for ${wallInstancesData.length} walls to the scene.`);
-            } else {
-                 console.warn("No wall instance data collected.");
-            }
-
-
-            // Create InstancedMesh for Furniture
-            if (furnitureInstancesData.length > 0) {
-                furnitureInstanceMesh = new THREE.InstancedMesh(furnitureBaseGeometry, furnitureMaterial, furnitureInstancesData.length);
-                const matrix = new THREE.Matrix4();
-                const dummy = new THREE.Object3D();
-
-                for (let i = 0; i < furnitureInstancesData.length; i++) {
-                    const instance = furnitureInstancesData[i];
-                    dummy.position.copy(instance.position);
-                    dummy.scale.copy(instance.scale);
-                    // dummy.rotation.set(0, instance.rotationY || 0, 0); // If you had rotation data
-                    dummy.updateMatrixWorld(true);
-
-                    furnitureInstanceMesh.setMatrixAt(i, dummy.matrixWorld);
-                }
-
-                furnitureInstanceMesh.instanceMatrix.needsUpdate = true;
-                furnitureInstanceMesh.castShadow = true;
-                furnitureInstanceMesh.receiveShadow = true;
-                scene.add(furnitureInstanceMesh);
-                console.log(`Added InstancedMesh for ${furnitureInstancesData.length} furniture items to the scene.`);
-            } else {
-                 console.warn("No furniture instance data collected.");
-            }
-
-            // TODO: In a future step, create separate geometry for doorways and potentially stairs
-            // and add them to the scene, possibly using instancing if there are many.
-
-
-            // Clear the temporary data arrays after creating the instanced meshes
-            wallInstancesData.length = 0;
-            furnitureInstancesData.length = 0;
-             // Keep doorwayInstancesData for potential future use (e.g., collision)
-             // doorwayInstancesData.length = 0;
-        }
-
-
-        /**
-         * Handles window resize events.
-         */
-        function onWindowResize() {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-            // Update composer size and bloom resolution with render scale
-            composer.setSize(width * RENDER_SCALE, height * RENDER_SCALE);
-            if (bloomPass instanceof UnrealBloomPass) {
-                bloomPass.resolution.set(width * RENDER_SCALE, height * RENDER_SCALE);
-            }
-        }
-
-        /**
-         * Toggles the visibility of the settings menu and pointer lock.
-         */
-        function toggleMenu() {
-            if (!menuElement || !document.getElementById('blocker') || !document.getElementById('instructions')) {
-                 console.warn("Menu, blocker, or instructions element not found, cannot toggle menu.");
-                 return;
-             }
-
-            if (menuElement.style.display === 'flex') {
-                // Hide menu, show blocker briefly if needed (though lock handles this), re-lock pointer
-                menuElement.style.display = 'none';
-                document.getElementById('blocker').style.display = 'none';
-                controls.lock();
-            } else {
-                // Show menu, show blocker, unlock pointer
-                menuElement.style.display = 'flex';
-                document.getElementById('blocker').style.display = 'flex';
-                // Ensure instructions are hidden if menu is shown
-                 document.getElementById('instructions').style.display = 'none';
-                controls.unlock(); // Unlock pointer when menu is open
-            }
-        }
-
-        /**
-         * Updates environment settings based on slider values.
-         */
-        function updateSettings() {
-            // Update Fog
-            if (scene && scene.fog && fogNearSlider && fogFarSlider && fogNearValueSpan && fogFarValueSpan) {
-                scene.fog.near = parseFloat(fogNearSlider.value);
-                scene.fog.far = parseFloat(fogFarSlider.value);
-                fogNearValueSpan.textContent = fogNearSlider.value;
-                fogFarValueSpan.textContent = fogFarSlider.value;
-            } else if (!scene || !scene.fog) {
-                 console.warn("Scene or fog not initialized, cannot update fog settings.");
-            } else {
-                 console.warn("Fog slider elements not found, cannot update fog settings.");
-            }
-
-            // Update Ambient Light
-            if (ambientLight && ambientLightIntensitySlider && ambientLightIntensityValueSpan) {
-                ambientLight.intensity = parseFloat(ambientLightIntensitySlider.value);
-                ambientLightIntensityValueSpan.textContent = ambientLightIntensitySlider.value;
-            } else if (!ambientLight) {
-                 console.warn("Ambient light not initialized, cannot update ambient light settings.");
-            } else {
-                 console.warn("Ambient light slider elements not found, cannot update ambient light settings.");
-            }
-
-            // Update Bloom Pass
-            if (bloomPass && bloomStrengthSlider && bloomRadiusSlider && bloomThresholdSlider && bloomStrengthValueSpan && bloomRadiusValueSpan && bloomThresholdValueSpan) {
-                bloomPass.strength = parseFloat(bloomStrengthSlider.value);
-                bloomPass.radius = parseFloat(bloomRadiusSlider.value);
-                bloomPass.threshold = parseFloat(bloomThresholdSlider.value);
-                bloomStrengthValueSpan.textContent = bloomStrengthSlider.value;
-                bloomRadiusValueSpan.textContent = bloomRadiusSlider.value;
-                bloomThresholdValueSpan.textContent = bloomThresholdSlider.value;
-            } else if (!bloomPass) {
-                 console.warn("Bloom pass not initialized, cannot update bloom settings.");
-            } else {
-                console.warn("Bloom slider elements not found, cannot update bloom settings.");
-            }
-
-            // Update Film Pass
-            if (filmPass && filmPass.uniforms && filmPass.uniforms.nIntensity && filmPass.uniforms.sIntensity && filmPass.uniforms.sCount && filmNoiseSlider && filmScanlinesSlider && filmScanlinesCountSlider && filmNoiseValueSpan && filmScanlinesValueSpan && filmScanlinesCountValueSpan) {
-                filmPass.uniforms.nIntensity.value = parseFloat(filmNoiseSlider.value);
-                filmPass.uniforms.sIntensity.value = parseFloat(filmScanlinesSlider.value);
-                filmPass.uniforms.sCount.value = parseInt(filmScanlinesCountSlider.value); // Update count
-                filmNoiseValueSpan.textContent = filmNoiseSlider.value;
-                filmScanlinesValueSpan.textContent = filmScanlinesSlider.value;
-                filmScanlinesCountValueSpan.textContent = filmScanlinesCountSlider.value; // Update span
-            } else if (!filmPass || !filmPass.uniforms) {
-                 console.warn("Film pass or its uniforms not initialized, cannot update film settings.");
-            } else {
-                 console.warn("Film slider elements not found, cannot update film settings.");
-            }
-
-             // Update Glitch Pass
-              if (glitchPass && glitchIntensitySlider && glitchIntensityValueSpan) {
-                  const intensity = parseFloat(glitchIntensitySlider.value);
-                  glitchPass.enabled = intensity > 0.005; // Enable/disable the pass based on slider (add a small threshold)
-                  // The actual glitch intensity is controlled in the animate loop by the chance to goWild
-                  glitchIntensityValueSpan.textContent = glitchIntensitySlider.value;
-              } else if (!glitchPass) {
-                 console.warn("Glitch pass not initialized, cannot update glitch settings.");
-              } else {
-                 console.warn("Glitch slider elements not found, cannot update glitch settings.");
-              }
-        }
-
-        /**
-         * Starts the demo timer.
-         */
-        function startDemoTimer() {
-            demoTimer = setTimeout(() => {
-                if (!controls.isLocked) {
-                    console.log("Demo timer expired. Starting demo mode.");
-                    isDemoMode = true;
-                    // Hide the instructions and blocker when demo starts
-                    const blocker = document.getElementById('blocker');
-                    const instructions = document.getElementById('instructions');
-                    if (blocker) blocker.style.display = 'none';
-                    if (instructions) instructions.style.display = 'none';
-                    // Reset demo turn timer
-                    timeSinceLastDemoTurn = 0;
-                }
-            }, demoDelay);
-             console.log(`Demo timer started for ${demoDelay / 1000} seconds.`);
-        }
-
-
-        /**
-         * The main game loop.
-         */
         function animate() {
             requestAnimationFrame(animate);
+            const time = performance.now(); const delta = prevTime === undefined ? 0.016 : (time - prevTime) / 1000; prevTime = time;
 
-            const time = performance.now();
-            // Use a small default delta if prevTime is undefined for the very first frame
-            const delta = prevTime === undefined ? 0.016 : (time - prevTime) / 1000;
-            prevTime = time;
-
-            // --- Handle Demo Mode Movement ---
-             if (isDemoMode && controls && controls.getObject()) {
-                 // Move forward in the current camera direction
-                 controls.moveForward(demoMoveSpeed * delta);
-
-                 // Handle random turns
-                 timeSinceLastDemoTurn += delta;
-                 if (timeSinceLastDemoTurn >= demoTurnInterval) {
-                     const randomAngle = THREE.MathUtils.randFloat(Math.PI / 4, Math.PI); // Turn between 45 and 180 degrees
-                     const turnDirection = Math.random() < 0.5 ? 1 : -1; // Randomly turn left or right
-                     controls.getObject().rotation.y += randomAngle * turnDirection;
-                     timeSinceLastDemoTurn = 0; // Reset turn timer
-                     console.log(`Demo mode: Turning by ${randomAngle * turnDirection} radians.`);
-                 }
-
-                 // Keep the camera at the floor level in demo mode
+            if (isDemoMode && controls && controls.getObject()) {
+                 controls.moveForward(demoMoveSpeed * delta); timeSinceLastDemoTurn += delta;
+                 if (timeSinceLastDemoTurn >= demoTurnInterval) { const angle = THREE.MathUtils.randFloat(Math.PI / 4, Math.PI); const dir = Math.random() < 0.5 ? 1 : -1; controls.getObject().rotation.y += angle * dir; timeSinceLastDemoTurn = 0;}
                  controls.getObject().position.y = floorLevel;
-
-                 // Basic world boundary check for demo mode (optional, might look weird if it hits a boundary)
-                 const worldBoundary = Math.max(mazeSizeX, mazeSizeZ) * cellSize / 2 + cellSize;
-                 const playerPos = controls.getObject().position;
-                 if (playerPos.x > worldBoundary || playerPos.x < -worldBoundary || playerPos.z > worldBoundary || playerPos.z < -worldBoundary) {
-                      console.warn("Demo mode approaching world boundary.");
-                      // Could add logic here to turn away from the boundary
-                 }
-
-
-             } else if (controls && controls.isLocked === true) { // Only process player input when controls are locked and not in demo mode
-
-                // --- Handle Light Flickering and Humming ---
-                 if (lights.length > 0 && hummingSynth) {
-                     const flickerChancePerSecond = 0.3; // Chance for a light to start flickering per second
-                     const maxFlickeringLights = Math.ceil(lights.length * 0.1); // Max 10% of lights flicker at once
-
-                     let flickeringCount = 0;
-                     // Update flickering lights
-                     lights.forEach(lightData => {
-                         if (lightData.isFlickering) {
-                             if (time > lightData.flickerEndTime) {
-                                 // Stop flickering, return to original intensity
-                                 lightData.light.intensity = lightData.originalIntensity;
-                                 lightData.isFlickering = false;
-                             } else {
-                                 // Continue flickering with random intensity variations
-                                 lightData.light.intensity = lightData.originalIntensity * THREE.MathUtils.randFloat(0.05, 0.6); // Wider flicker range
-                                 flickeringCount++;
-                             }
-                         }
-                     });
-
-                     // Potentially start new flickers
-                     lights.forEach(lightData => {
-                         if (!lightData.isFlickering && flickeringCount < maxFlickeringLights) {
-                             if (Math.random() < flickerChancePerSecond * delta) {
-                                 lightData.isFlickering = true;
-                                 const flickerDuration = THREE.MathUtils.randFloat(0.05, 0.3); // Shorter flicker duration
-                                 lightData.flickerEndTime = time + flickerDuration * 1000;
-                                 flickeringCount++;
-                             }
-                         }
-                     });
-
-                     // <<< Added: Control humming volume based on flickering lights
-                     const flickeringRatio = flickeringCount / lights.length;
-                     // Map flickering ratio (0 to 1) to a volume range (e.g., -40 to -10 dB)
-                     const targetVolume = THREE.MathUtils.mapLinear(flickeringRatio, 0, 0.5, -40, -10); // Increase volume up to 50% flickering
-                     // Smoothly transition the humming volume
-                     hummingSynth.volume.linearRampTo(targetVolume, 0.5, Tone.now());
-                     // Added End >>>
-                 }
-
-
-                // --- Update Entity Visibility ---
-                 if (entityMesh && entityActive && time > entityAppearanceTime + entityDuration * 1000) {
-                     entityMesh.visible = false;
-                     entityActive = false;
-                     console.log("Entity hidden.");
-                     // Reset camera rotation if it was applied during scare (optional, depending on shake implementation)
-                     // controls.getObject().rotation.set(0, controls.getObject().rotation.y, 0); // Reset X rotation
-                 }
-
-                // --- Handle Jump Scares ---
-                timeSinceLastScare += delta;
-                // Trigger scare if cooldown is over, player is locked, not currently flashing, and entity isn't active
-                if (timeSinceLastScare > jumpScareCooldown && !isFlashing && !entityActive) {
-                    const scareChancePerSecond = 0.008; // Slightly lower base chance
-                    // Increase chance slightly based on time since last scare
-                    const dynamicScareChance = scareChancePerSecond + (timeSinceLastScare - jumpScareCooldown) * 0.001; // Chance increases over time
-
-                    if (Math.random() < dynamicScareChance * delta) {
-                        triggerJumpScare(time);
+            } else if (controls && controls.isLocked === true) {
+                if (heartbeatSynth && Tone.context.state === 'running') {
+                    timeSinceLastHeartbeatCycle += delta;
+                    if (timeSinceLastHeartbeatCycle >= heartbeatCycleTime) {
+                        try { heartbeatSynth.triggerAttackRelease("C1", "8n", Tone.now(), 0.9); heartbeatSynth.triggerAttackRelease("C1", "16n", Tone.now() + heartbeatDubDelay, 0.6); }
+                        catch (e) { console.error("Heartbeat error:", e); }
+                        timeSinceLastHeartbeatCycle = 0;
                     }
                 }
-                // Handle flash duration
-                if (isFlashing && time > flashEndTime) {
-                     endFlash();
+                if (lights.length > 0 && hummingSynth && Tone.context.state === 'running') {
+                    let flickeringCount = 0;
+                    lights.forEach(lD=>{if(lD.isFlickering){if(time>lD.flickerEndTime){lD.light.intensity=lD.originalIntensity;lD.isFlickering=false;}else{lD.light.intensity=lD.originalIntensity*THREE.MathUtils.randFloat(0.05,0.6);flickeringCount++;}}});
+                    lights.forEach(lD=>{if(!lD.isFlickering && flickeringCount < Math.ceil(lights.length*0.1) && Math.random() < 0.3*delta){lD.isFlickering=true;lD.flickerEndTime=time+THREE.MathUtils.randFloat(0.05,0.3)*1000;flickeringCount++;}});
+                    if(hummingSynth.volume) hummingSynth.volume.linearRampTo(THREE.MathUtils.mapLinear(flickeringCount/lights.length,0,0.5,-40,-10),0.5,Tone.now());
                 }
-
-
-                // --- Handle Other Random Events (Chittering, Speech, Deja Vu, Crying, Moaning, Laughter) ---
-                 timeSinceLastChitter += delta;
-                 if (controls.isLocked && timeSinceLastChitter > chitterCooldown && chitteringSynth && Tone.context.state === 'running') {
-                     const chitterChancePerSecond = 0.1; // Chance to chitter per second after cooldown
-                     if (Math.random() < chitterChancePerSecond * delta) {
-                         try {
-                             // Trigger a short chittering sound
-                              chitteringSynth.triggerAttackRelease("0.2", Tone.now()); // Duration of the chitter
-                             console.log("Chittering sound triggered.");
-                             timeSinceLastChitter = 0; // Reset chitter cooldown
-                         } catch (e) { console.error("Error triggering chittering synth:", e); }
-                     }
-                 }
-
-                 timeSinceLastSpeech += delta;
-                 if (controls.isLocked && timeSinceLastSpeech > speechCooldown && speechSynth && Tone.context.state === 'running') {
-                      const speechChancePerSecond = 0.08; // <<< Adjusted: Chance for speech per second after cooldown
-                      if (Math.random() < speechChancePerSecond * delta) {
-                           try {
-                                // Trigger a random note or sequence for unknown speech
-                                const notes = ["C4", "D#4", "F4", "G#4", "A4"]; // Example abstract "notes"
-                                const duration = THREE.MathUtils.randFloat(0.5, 1.5); // Duration of the speech sound
-                                const note = notes[Math.floor(Math.random() * notes.length)];
-                                speechSynth.triggerAttackRelease(note, duration, Tone.now());
-                                console.log("Unknown speech sound triggered.");
-                                timeSinceLastSpeech = 0; // Reset speech cooldown
-                           } catch (e) { console.error("Error triggering speech synth:", e); }
-                      }
-                 }
-
-                 timeSinceLastDejaVu += delta;
-                 if (controls.isLocked && timeSinceLastDejaVu > dejaVuCooldown && dejaVuSound && !isDejaVu && Tone.context.state === 'running') {
-                      const dejaVuChancePerSecond = 0.03; // <<< Adjusted: Chance for deja vu per second after cooldown
-                      if (Math.random() < dejaVuChancePerSecond * delta) {
-                           triggerDejaVu(time);
-                      }
-                 }
-                 // Handle deja vu effect duration
-                  if (isDejaVu && time > dejaVuEndTime) {
-                       endDejaVu();
-                  }
-
-                 // <<< Added: Handle Crying, Moaning, Laughter random triggers
-                 timeSinceLastCrying += delta;
-                 if (controls.isLocked && timeSinceLastCrying > cryingCooldown && cryingSound && Tone.context.state === 'running') {
-                      const cryingChancePerSecond = 0.015; // <<< Adjusted: Chance for crying per second after cooldown
-                      if (Math.random() < cryingChancePerSecond * delta) {
-                           try {
-                                // Trigger a crying-like sound (e.g., a wavering tone)
-                                cryingSound.triggerAttackRelease(THREE.MathUtils.randFloat(150, 300), THREE.MathUtils.randFloat(2, 4), Tone.now()); // Random frequency and duration
-                                console.log("Distant crying sound triggered.");
-                                timeSinceLastCrying = 0; // Reset cooldown
-                           } catch (e) { console.error("Error triggering crying sound:", e); }
-                      }
-                 }
-
-                 timeSinceLastMoaning += delta;
-                 if (controls.isLocked && timeSinceLastMoaning > moaningCooldown && moaningSound && Tone.context.state === 'running') {
-                      const moaningChancePerSecond = 0.012; // <<< Adjusted: Chance for moaning per second after cooldown
-                      if (Math.random() < moaningChancePerSecond * delta) {
-                           try {
-                                // Trigger a moaning-like sound (e.g., a sliding tone)
-                                moaningSound.triggerAttackRelease(THREE.MathUtils.randInt(100, 200), THREE.MathUtils.randFloat(1.5, 3), Tone.now()); // Random start note and duration
-                                console.log("Distant moaning sound triggered.");
-                                timeSinceLastMoaning = 0; // Reset cooldown
-                           } catch (e) { console.error("Error triggering moaning sound:", e); }
-                      }
-                 }
-
-                 timeSinceLastLaughter += delta;
-                 if (controls.isLocked && timeSinceLastLaughter > laughterCooldown && laughterSound && Tone.context.state === 'running') {
-                      const laughterChancePerSecond = 0.008; // <<< Adjusted: Chance for laughter per second after cooldown (less frequent)
-                      if (Math.random() < laughterChancePerSecond * delta) {
-                           try {
-                                // Trigger a laughter-like sound (e.g., choppy noise)
-                                laughterSound.triggerAttackRelease(THREE.MathUtils.randFloat(0.5, 1.5), Tone.now()); // Random duration
-                                console.log("Distant laughter sound triggered.");
-                                timeSinceLastLaughter = 0; // Reset cooldown
-                           } catch (e) { console.error("Error triggering laughter sound:", e); }
-                      }
-                 }
-                 // Added End >>>
-
-
-                // --- Player Movement and Physics ---
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= gravity * delta; // Apply gravity
-
-                direction.z = Number(moveForward) - Number(moveBackward);
-                direction.x = Number(moveRight) - Number(moveLeft);
-
-                if (moveForward || moveBackward || moveLeft || moveRight) {
-                    direction.normalize(); // Normalize movement direction
-                } else {
-                     direction.setScalar(0); // Stop movement if no keys are pressed
-                }
-
-                 // Apply velocity based on player input relative to their facing direction
-                 velocity.z -= direction.z * moveSpeed * delta;
-                 velocity.x -= direction.x * moveSpeed * delta;
-
-
-                // Move the controls object (which contains the camera)
-                // Use controls.moveRight/moveForward which apply movement relative to the camera's current orientation
-                 controls.moveRight(-velocity.x * delta); // Negative velocity.x because moveRight is positive to the right
-                 controls.moveForward(-velocity.z * delta); // Negative velocity.z because moveForward is positive forward
-
-
-                // Apply vertical velocity
+                if (entityMesh && entityActive && time > entityAppearanceTime + entityDuration*1000) { entityMesh.visible=false; entityActive=false; } 
+                timeSinceLastScare += delta;
+                if (timeSinceLastScare > jumpScareCooldown && !isFlashing && !entityActive && Math.random() < (0.008 + (timeSinceLastScare-jumpScareCooldown)*0.001)*delta) { triggerJumpScare(time); }
+                if (isFlashing && time > flashEndTime) { endFlash(); } 
+                timeSinceLastChitter+=delta; if(controls.isLocked && timeSinceLastChitter > chitterCooldown && chitteringSynth && Tone.context.state === 'running' && Math.random() < 0.1*delta){try{chitteringSynth.triggerAttackRelease("0.2",Tone.now());timeSinceLastChitter=0;}catch(e){console.error("Chitter error:",e);}}
+                timeSinceLastSpeech+=delta; if(controls.isLocked && timeSinceLastSpeech > speechCooldown && speechSynth && Tone.context.state === 'running' && Math.random() < 0.08*delta){try{const n=["C4","D#4","F4","G#4","A4"];speechSynth.triggerAttackRelease(n[Math.floor(Math.random()*n.length)],THREE.MathUtils.randFloat(0.5,1.5),Tone.now());timeSinceLastSpeech=0;}catch(e){console.error("Speech error:",e);}}
+                timeSinceLastDejaVu+=delta; if(controls.isLocked && timeSinceLastDejaVu > dejaVuCooldown && dejaVuSound && !isDejaVu && Tone.context.state === 'running' && Math.random() < 0.03*delta){triggerDejaVu(time);}
+                if(isDejaVu && time > dejaVuEndTime){endDejaVu();}
+                timeSinceLastCrying+=delta; if(controls.isLocked && timeSinceLastCrying > cryingCooldown && cryingSound && Tone.context.state === 'running' && Math.random() < 0.015*delta){try{cryingSound.triggerAttackRelease(THREE.MathUtils.randFloat(150,300),THREE.MathUtils.randFloat(2,4),Tone.now());timeSinceLastCrying=0;}catch(e){console.error("Crying error:",e);}}
+                timeSinceLastMoaning+=delta; if(controls.isLocked && timeSinceLastMoaning > moaningCooldown && moaningSound && Tone.context.state === 'running' && Math.random() < 0.012*delta){try{moaningSound.triggerAttackRelease(THREE.MathUtils.randInt(100,200),THREE.MathUtils.randFloat(1.5,3),Tone.now());timeSinceLastMoaning=0;}catch(e){console.error("Moaning error:",e);}}
+                timeSinceLastLaughter+=delta; if(controls.isLocked && timeSinceLastLaughter > laughterCooldown && laughterSound && Tone.context.state === 'running' && Math.random() < 0.008*delta){try{laughterSound.triggerAttackRelease(THREE.MathUtils.randFloat(0.5,1.5),Tone.now());timeSinceLastLaughter=0;}catch(e){console.error("Laughter error:",e);}}
+                
+                velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; velocity.y -= gravity * delta;
+                direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft);
+                if (moveForward || moveBackward || moveLeft || moveRight) { direction.normalize(); } else { direction.setScalar(0); }
+                velocity.z -= direction.z * moveSpeed * delta; velocity.x -= direction.x * moveSpeed * delta;
+                controls.moveRight(-velocity.x * delta); controls.moveForward(-velocity.z * delta);
                 controls.getObject().position.y += (velocity.y * delta);
-
-                // Ground collision
-                if (controls.getObject().position.y < floorLevel) {
-                    velocity.y = 0;
-                    controls.getObject().position.y = floorLevel;
-                    // Removed canJump = true; as jumping is removed
+                if (controls.getObject().position.y < floorLevel) { velocity.y = 0; controls.getObject().position.y = floorLevel; }
+                
+                if (glitchPass && glitchPass.enabled && !glitchPass.goWild) { 
+                    const intensity = GLITCH_INTENSITY; 
+                    if (intensity > 0.005 && Math.random() < intensity * 0.5 * delta) { 
+                        glitchPass.goWild = true; 
+                         if (glitchSoundSynth && Tone.context.state === 'running') { try { glitchSoundSynth.triggerAttackRelease("0.05", Tone.now(), 0.3); } catch (e) { /* console.error("Subtle glitch sound error:", e); */ }} 
+                        setTimeout(() => { if (glitchPass) glitchPass.goWild = false; }, THREE.MathUtils.randFloat(30, 80)); 
+                    }
                 }
-
-                 // --- Basic World Boundary Collision (Prevent falling out/going through main boundaries) ---
-                 const worldBoundary = Math.max(mazeSizeX, mazeSizeZ) * cellSize / 2 + cellSize; // Boundary slightly outside maze
-                 const playerPos = controls.getObject().position;
-
-                 if (playerPos.x > worldBoundary) playerPos.x = worldBoundary;
-                 if (playerPos.x < -worldBoundary) playerPos.x = -worldBoundary;
-                 if (playerPos.z > worldBoundary) playerPos.z = worldBoundary;
-                 if (playerPos.z < -worldBoundary) playerPos.z = -worldBoundary;
-
-                 // TODO: Implement more accurate collision detection with the maze walls and furniture instances
-                 // This requires iterating through walls near the player and checking for intersection
-                 // Raycasting is a common approach for this in first-person controls.
-
-
-                // --- Handle Glitch Effect Activation ---
-                if (glitchPass && glitchPass.enabled && glitchIntensitySlider) {
-                     const intensity = parseFloat(glitchIntensitySlider.value);
-                     // Only trigger wild glitches if intensity slider is above a minimal value
-                     if (intensity > 0.005) {
-                         const glitchChancePerSecond = intensity * 1.5; // Glitch frequency scales with slider (adjusted multiplier)
-
-                         // Trigger a short burst of wild glitches based on chance
-                         if (!glitchPass.goWild && Math.random() < glitchChancePerSecond * delta) {
-                             glitchPass.goWild = true;
-                             // <<< Added: Trigger glitch sound when glitch effect starts
-                             if (glitchSoundSynth && Tone.context.state === 'running') {
-                                 try {
-                                      glitchSoundSynth.triggerAttackRelease("0.1", Tone.now()); // Play a short noise burst
-                                 } catch (e) { console.error("Error triggering glitch sound synth:", e); }
-                             }
-                             // Added End >>>
-
-                             // Schedule turning off 'goWild' after a short, random duration
-                             const glitchDurationMs = THREE.MathUtils.randFloat(50, 200); // Shorter glitch duration (50-200ms)
-                             setTimeout(() => {
-                                 if (glitchPass) glitchPass.goWild = false;
-                                 // <<< Added: Stop glitch sound when glitch effect ends (if it's still playing)
-                                  if (glitchSoundSynth && Tone.context.state === 'running') {
-                                      try {
-                                          // Use a very short release time or stop immediately if needed
-                                          // glitchSoundSynth.triggerRelease(Tone.now()); // Or simply stop the source if it's a continuous noise
-                                          // For NoiseSynth with a short envelope, triggerAttackRelease handles the stop.
-                                      } catch (e) { console.error("Error stopping glitch sound synth:", e); }
-                                  }
-                                 // Added End >>>
-                             }, glitchDurationMs);
-                         }
-                     } else {
-                         glitchPass.goWild = false; // Ensure not wild if intensity is very low
-                     }
-                 }
-
-            } // End of if (controls.isLocked)
-
-
-            // --- Rendering ---
-            // Render the scene using the EffectComposer
-            if (renderer && scene && camera && composer) {
-                composer.render(delta);
-            } else {
-                 console.warn("Rendering components not fully initialized.");
             }
+            if (composer) composer.render(delta);
         }
 
-        // --- Jump Scare Logic ---
-        /**
-         * Triggers the jump scare effect (sound, flash, entity appearance).
-         * @param {number} currentTime - The current time in milliseconds.
-         */
         function triggerJumpScare(currentTime) {
-            console.log("Jump Scare Triggered!");
-            timeSinceLastScare = 0; // Reset cooldown
+            console.log("Jump Scare Initiated! - More Horrific Version");
+            timeSinceLastScare = 0; 
 
-            // Play jump scare sound
-            if (synth && typeof synth.triggerAttackRelease === 'function' && Tone.context.state === 'running') {
-                try { synth.triggerAttackRelease("0.1", Tone.now()); } catch (e) { console.error("Error triggering synth:", e); }
-            } else { console.warn("Synth not ready or audio context not running for jump scare sound."); }
-
-            // Screen flash effect
-            const flashOverlay = document.getElementById('flashOverlay');
-            if (flashOverlay) {
-                isFlashing = true;
-                flashEndTime = currentTime + flashDuration * 1000; // End time for the flash
-                flashOverlay.style.opacity = '1'; // Make flash overlay visible instantly
-            } else {
-                 console.warn("Flash overlay element not found.");
+            // 1. AUDIO - More Intense and Layered Sound
+            if (synth && Tone.context.state === 'running') { 
+                try {
+                    if(synth.volume) synth.volume.value = -5; 
+                    if(synth.envelope) {
+                        synth.envelope.attack = 0.001;
+                        synth.envelope.decay = 0.08;
+                        synth.envelope.sustain = 0;
+                    }
+                    synth.triggerAttackRelease("0.1s", Tone.now()); 
+                    setTimeout(() => { if(synth && synth.volume) synth.volume.value = -15; }, 200); 
+                } catch (e) { console.error("Jumpscare synth error (noise):", e); }
             }
 
+            if (typeof jumpScareThudSynth !== 'undefined' && jumpScareThudSynth && Tone.context.state === 'running') {
+                try {
+                    jumpScareThudSynth.triggerAttackRelease("A0", "0.6s", Tone.now()); 
+                } catch (e) { console.error("Jumpscare synth error (thud):", e); }
+            }
 
-             // Camera shake (subtle rotation applied directly to the controls object's rotation)
-             // Note: Be cautious with direct rotation manipulation when using PointerLockControls.
-             // A more robust shake might involve a separate camera container or animation library.
-             if (controls && controls.getObject()) {
-                 const shakeIntensity = 0.01; // Reduced shake intensity
-                 const cameraObject = controls.getObject();
-                 // Apply small random rotations to X and Y axes relative to current orientation
-                 cameraObject.rotation.x += (Math.random() - 0.5) * shakeIntensity;
-                 cameraObject.rotation.y += (Math.random() - 0.5) * shakeIntensity;
-                 // The flashEnd function will not explicitly reset this, allowing it to decay naturally with player movement or just remain a slight perturbation.
-             } else {
-                 console.warn("Controls object not available for camera shake.");
-             }
+            // 2. VISUAL - Screen Flash (Intensified)
+            const flash = document.getElementById('flashOverlay');
+            if (flash) {
+                isFlashing = true;
+                flash.style.transition = 'none'; 
+                flash.style.backgroundColor = 'rgba(200, 0, 0, 0.35)'; 
+                flash.style.opacity = '1'; 
+                
+                setTimeout(() => { 
+                    if(flash) {
+                        flash.style.backgroundColor = 'white'; 
+                        flash.style.opacity = '0.9'; 
+                    }
+                }, 60); 
 
+                flashEndTime = currentTime + 200; 
+            }
+            
+            // 3. VISUAL - Camera Shake (More Violent and Longer)
+            if (controls && controls.getObject()) {
+                const camObj = controls.getObject();
+                const baseShakeIntensity = 0.07; 
+                const shakeDuration = 800;   
+                const shakeStartTime = performance.now();
 
-            // Show Entity
+                function applyShake() {
+                    const elapsedTime = performance.now() - shakeStartTime;
+                    if (elapsedTime < shakeDuration) {
+                        const currentProgress = elapsedTime / shakeDuration;
+                        const currentShake = baseShakeIntensity * (1 - Math.pow(currentProgress, 2)); 
+
+                        camObj.rotation.x += (Math.random() - 0.5) * currentShake * 2.5; 
+                        camObj.rotation.y += (Math.random() - 0.5) * currentShake * 2.5; 
+                        camObj.rotation.z += (Math.random() - 0.5) * currentShake * 1.5; 
+
+                        if (elapsedTime < 150) { 
+                            const joltStrength = currentShake * 0.3; 
+                            camObj.position.x += (Math.random() - 0.5) * joltStrength;
+                            camObj.position.z += (Math.random() - 0.5) * joltStrength;
+                        }
+                        requestAnimationFrame(applyShake);
+                    }
+                }
+                applyShake();
+            }
+
+            // 4. VISUAL - Post-Processing Spike
+            if (glitchPass) {
+                const originalGoWildState = glitchPass.goWild;
+                glitchPass.goWild = true; 
+                setTimeout(() => {
+                    if (glitchPass) glitchPass.goWild = originalGoWildState; 
+                }, 800); 
+            }
+            if (bloomPass) {
+                const originalStrength = bloomPass.strength;
+                bloomPass.strength = originalStrength * 3.5; 
+                setTimeout(() => {
+                    if (bloomPass) bloomPass.strength = originalStrength;
+                }, 450); 
+            }
+            if (scene.fog) {
+                const originalFogColorHex = scene.fog.color.getHex();
+                const originalFogNear = scene.fog.near;
+                const originalFogFar = scene.fog.far;
+                scene.fog.color.setHex(0x1A0000); 
+                scene.fog.near = DEFAULT_FOG_NEAR / 10;  
+                scene.fog.far = DEFAULT_FOG_FAR / 6;   
+                setTimeout(() => {
+                    if(scene.fog) {
+                        scene.fog.color.setHex(originalFogColorHex);
+                        scene.fog.near = originalFogNear;
+                        scene.fog.far = originalFogFar;
+                    }
+                }, 1200); 
+            }
+
+            // 5. ENTITY - Appearance (Closer, more jarring)
             if (entityMesh && controls && controls.getObject()) {
-                const playerPosition = controls.getObject().position;
-                // Get player's facing direction
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                 // Get a vector pointing to the player's right
-                 const side = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-
-                 const offsetDistance = THREE.MathUtils.randFloat(30, 60); // Closer range
-                 const sideOffset = THREE.MathUtils.randFloat(-25, 25); // Offset to the side
-
-                 const entityPos = playerPosition.clone()
-                      // Position entity in front of the player
-                      .add(forward.multiplyScalar(offsetDistance))
-                      // Add a random side offset
-                     .add(side.multiplyScalar(sideOffset));
-
-
-                // Adjust height (place base slightly above floor)
-                entityPos.y = floorLevel + (entityMesh.geometry.parameters.height / 2);
-
-                entityMesh.position.copy(entityPos);
-                // Make the entity face the player at its own height
-                entityMesh.lookAt(playerPosition.x, entityMesh.position.y, playerPosition.z);
-
-                entityMesh.visible = true; // Make entity visible
-                entityActive = true; // Mark entity as active
-                entityAppearanceTime = currentTime; // Record appearance time
-                console.log("Entity shown.");
-            } else {
-                 console.warn("Entity mesh or controls not initialized, cannot show entity.");
+                const pPos = controls.getObject().position;
+                const camQuaternion = camera.quaternion; 
+                const randomAngle = (Math.random() - 0.5) * 0.3; 
+                const randomVerticalAngle = (Math.random() - 0.5) * 0.15; 
+                const fwd = new THREE.Vector3(0, 0, -1);
+                fwd.applyQuaternion(camQuaternion); 
+                fwd.applyAxisAngle(new THREE.Vector3(0,1,0), randomAngle); 
+                fwd.applyAxisAngle(new THREE.Vector3(1,0,0).applyQuaternion(camQuaternion), randomVerticalAngle); 
+                const offsetDistance = THREE.MathUtils.randFloat(15, 30); 
+                const ePos = pPos.clone().add(fwd.multiplyScalar(offsetDistance));
+                ePos.y = Math.max(floorLevel + pillarSize * 0.3, pPos.y - wallHeight*0.15 + Math.random() * wallHeight*0.3); 
+                entityMesh.position.copy(ePos);
+                entityMesh.lookAt(camera.position); 
+                entityMesh.visible = true; entityActive = true; entityAppearanceTime = currentTime;
             }
         }
 
-        /**
-         * Ends the jump scare screen flash effect and resets camera shake (implicit decay).
-         */
         function endFlash() {
-            const flashOverlay = document.getElementById('flashOverlay');
-            if (flashOverlay) {
-                // Fade out the flash overlay smoothly
-                flashOverlay.style.opacity = '0';
+            const flash = document.getElementById('flashOverlay');
+            if (flash) {
+                flash.style.transition = 'opacity 0.15s ease-out'; 
+                flash.style.opacity = '0';
+                setTimeout(() => { 
+                    if(flash) {
+                        flash.style.backgroundColor = 'white'; 
+                    }
+                }, 150); 
             }
             isFlashing = false;
-            console.log("Flash ended.");
-
-            // Camera shake reset is handled implicitly by the temporary nature of the rotation application
-            // or could be explicitly animated back to zero if a more complex shake was used.
         }
+        function triggerDejaVu(currentTime) { timeSinceLastDejaVu=0;isDejaVu=true;dejaVuEndTime=currentTime+dejaVuDuration*1000; if(dejaVuSound && Tone.context.state==='running'){try{dejaVuSound.triggerAttackRelease("0.4",Tone.now());}catch(e){console.error("DejaVu sound error:",e);}}}
+        function endDejaVu() { isDejaVu = false; }
 
-         /**
-          * Triggers the acute déjà vu effect (sound and subtle visual cue).
-          * @param {number} currentTime - The current time in milliseconds.
-          */
-         function triggerDejaVu(currentTime) {
-              console.log("Deja Vu effect triggered!");
-              timeSinceLastDejaVu = 0; // Reset cooldown
-              isDejaVu = true;
-              dejaVuEndTime = currentTime + dejaVuDuration * 1000; // Set end time
-
-              // Play deja vu sound
-              if (dejaVuSound && typeof dejaVuSound.triggerAttackRelease === 'function' && Tone.context.state === 'running') {
-                  try {
-                       dejaVuSound.triggerAttackRelease("0.4", Tone.now()); // Play the sound
-                  } catch (e) { console.error("Error triggering deja vu sound:", e); }
-              } else { console.warn("Deja vu sound not ready or audio context not running."); }
-
-              // Optional: Add a subtle visual effect for deja vu (e.g., brief color shift or distortion)
-              // This would require modifying a post-processing shader or adding a temporary overlay effect.
-              // For now, we'll just log the effect.
-              console.log("Applying subtle deja vu visual effect (placeholder).");
-         }
-
-         /**
-          * Ends the acute déjà vu effect.
-          */
-         function endDejaVu() {
-              isDejaVu = false;
-              console.log("Deja Vu effect ended.");
-              // Reset any visual effects applied in triggerDejaVu (if implemented)
-         }
-
-
-        // --- Event Listeners for Input ---
-        document.addEventListener('keydown', (event) => {
-            if (!controls) return; // Ensure controls are initialized
-            if (isDemoMode) return; // Ignore player input in demo mode
-
-            switch (event.code) {
-                case 'KeyW':
-                case 'ArrowUp':
-                    moveForward = true;
-                    break;
-                case 'KeyA':
-                case 'ArrowLeft':
-                    moveLeft = true;
-                    break;
-                case 'KeyS':
-                case 'ArrowDown':
-                    moveBackward = true;
-                    break;
-                case 'KeyD':
-                case 'ArrowRight':
-                    moveRight = true;
-                    break;
-                case 'Space':
-                    // Removed jump logic
-                    break;
-                case 'Escape':
-                    // Unlock pointer on Escape if locked
-                    if (controls.isLocked) {
-                        controls.unlock();
-                    }
-                    break;
-                 case 'KeyM':
-                      // Toggle menu on 'M' key press
-                      toggleMenu();
-                      break;
-            }
-        });
-
-        document.addEventListener('keyup', (event) => {
-             if (!controls) return; // Ensure controls are initialized
-             if (isDemoMode) return; // Ignore player input in demo mode
-
-            switch (event.code) {
-                case 'KeyW':
-                case 'ArrowUp':
-                    moveForward = false;
-                    break;
-                case 'KeyA':
-                case 'ArrowLeft':
-                    moveLeft = false;
-                    break;
-                case 'KeyS':
-                case 'ArrowDown':
-                    moveBackward = false;
-                    break;
-                case 'KeyD':
-                case 'ArrowRight':
-                    moveRight = false;
-                    break;
-            }
-        });
+        document.addEventListener('keydown', (event) => { if (!controls || isDemoMode) return; switch (event.code) { case 'KeyW': case 'ArrowUp': moveForward = true; break; case 'KeyA': case 'ArrowLeft': moveLeft = true; break; case 'KeyS': case 'ArrowDown': moveBackward = true; break; case 'KeyD': case 'ArrowRight': moveRight = true; break; case 'Escape': if (controls.isLocked) controls.unlock(); break; } });
+        document.addEventListener('keyup', (event) => { if (!controls || isDemoMode) return; switch (event.code) { case 'KeyW': case 'ArrowUp': moveForward = false; break; case 'KeyA': case 'ArrowLeft': moveLeft = false; break; case 'KeyS': case 'ArrowDown': moveBackward = false; break; case 'KeyD': case 'ArrowRight': moveRight = false; break; } });
 
     </script>
 </body>
