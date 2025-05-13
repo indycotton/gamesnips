@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Destructible .glb with Three.js + Ammo.js</title>
+  <style> body { margin: 0; overflow: hidden; } canvas { display: block; } </style>
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/examples/js/misc/ConvexObjectBreaker.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ammo.js"></script>
+
+  <script>
+    let scene, camera, renderer, breaker;
+    let physicsWorld, tmpTransform;
+    let model;
+    let rigidBodies = [];
+
+    Ammo().then(() => {
+      initPhysics();
+      initScene();
+      loadGLBModel();
+      animate();
+    });
+
+    function initPhysics() {
+      tmpTransform = new Ammo.btTransform();
+      const collisionConfig = new Ammo.btDefaultCollisionConfiguration();
+      const dispatcher = new Ammo.btCollisionDispatcher(collisionConfig);
+      const broadphase = new Ammo.btDbvtBroadphase();
+      const solver = new Ammo.btSequentialImpulseConstraintSolver();
+      physicsWorld = new Ammo.btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig);
+      physicsWorld.setGravity(new Ammo.btVector3(0, -9.8, 0));
+    }
+
+    function initScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x202020);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 5, 10);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      breaker = new THREE.ConvexObjectBreaker();
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(10, 10, 10);
+      scene.add(light);
+
+      const ambient = new THREE.AmbientLight(0x404040);
+      scene.add(ambient);
+
+      // Ground
+      const ground = new THREE.Mesh(new THREE.BoxGeometry(20, 1, 20), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+      ground.position.y = -0.5;
+      scene.add(ground);
+      createRigidBody(ground, 0);
+    }
+
+    function loadGLBModel() {
+      const loader = new THREE.GLTFLoader();
+      loader.load('https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/glTF/BoxTextured.glb',
+        gltf => {
+          model = gltf.scene.children[0]; // Assuming first child is the mesh
+          model.scale.set(2, 2, 2);
+          model.position.set(0, 5, 0);
+          scene.add(model);
+
+          // Make it breakable
+          breaker.prepareBreakableObject(model, 1, new THREE.Vector3(), new THREE.Vector3(), true);
+          createRigidBody(model, 1);
+        },
+        undefined,
+        error => {
+          console.error('An error happened while loading the model:', error);
+        }
+      );
+    }
+
+    function createRigidBody(threeObj, mass) {
+      const shape = createConvexHullPhysicsShape(threeObj.geometry);
+      const transform = new Ammo.btTransform();
+      transform.setIdentity();
+      const position = threeObj.position;
+      transform.setOrigin(new Ammo.btVector3(position.x, position.y, position.z));
+      const motionState = new Ammo.btDefaultMotionState(transform);
+
+      const localInertia = new Ammo.btVector3(0, 0, 0);
+      if (mass > 0) shape.calculateLocalInertia(mass, localInertia);
+
+      const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, shape, localInertia);
+      const body = new Ammo.btRigidBody(rbInfo);
+
+      threeObj.userData.physicsBody = body;
+      scene.add(threeObj);
+      if (mass > 0) rigidBodies.push(threeObj);
+
+      physicsWorld.addRigidBody(body);
+    }
+
+    function createConvexHullPhysicsShape(geometry) {
+      const btShape = new Ammo.btConvexHullShape();
+      const vertices = geometry.attributes.position.array;
+      for (let i = 0; i < vertices.length; i += 3) {
+        const vec = new Ammo.btVector3(vertices[i], vertices[i + 1], vertices[i + 2]);
+        btShape.addPoint(vec, true);
+      }
+      return btShape;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      updatePhysics();
+      renderer.render(scene, camera);
+    }
+
+    function updatePhysics() {
+      physicsWorld.stepSimulation(1 / 60, 10);
+
+      for (let obj of rigidBodies) {
+        const body = obj.userData.physicsBody;
+        const ms = body.getMotionState();
+        if (ms) {
+          ms.getWorldTransform(tmpTransform);
+          const p = tmpTransform.getOrigin();
+          const q = tmpTransform.getRotation();
+          obj.position.set(p.x(), p.y(), p.z());
+          obj.quaternion.set(q.x(), q.y(), q.z(), q.w());
+        }
+      }
+    }
+
+    // On click – simulate impact + break
+    window.addEventListener('click', () => {
+      if (!model) {
+        console.log('Model not yet loaded.');
+        return;
+      }
+
+      const impactPoint = model.position.clone().add(new THREE.Vector3(0, -1, 0));
+      const normal = new THREE.Vector3(0, 1, 0);
+
+      const fragments = breaker.subdivideByImpact(model, impactPoint, normal, 1.5);
+      for (const frag of fragments) {
+        createRigidBody(frag, 1);
+        scene.add(frag);
+        rigidBodies.push(frag);
+      }
+
+      scene.remove(model);
+      physicsWorld.removeRigidBody(model.userData.physicsBody);
+      model = null;
+    });
+  </script>
+</body>
+</html>

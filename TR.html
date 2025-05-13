@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Star Wars ASCII Arcade Trench Run</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Press Start 2P', cursive;
+            color: #00ff00; /* Green text color */
+            text-align: center;
+        }
+        /* The AsciiEffect will create its own canvas or div, style its container */
+        #ascii-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Hide potential scrollbars from effect */
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            z-index: 10;
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+        #info div {
+            display: inline-block;
+            margin: 0 20px;
+        }
+    </style>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+            "AsciiEffect": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/effects/AsciiEffect.js"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="info">
+        <div id="score">SCORE: 0</div>
+        <div id="shield">SHIELD: 100</div>
+        <div id="wave">WAVE: 1</div>
+    </div>
+
+    <div id="ascii-container"></div>
+
+    <script type="module">
+        // Import Three.js core and AsciiEffect
+        import * as THREE from 'three';
+        import { AsciiEffect } from 'AsciiEffect'; // Use the name from importmap
+
+        let camera, scene, renderer, effect;
+        let xwing;
+
+        // Set up the scene, camera
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000); // Black background
+
+        // Use a perspective camera
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 0); // Start camera at the origin
+
+        // --- Create the Trench (Wireframe) ---
+        const trenchWidth = 10;
+        const trenchHeight = 5;
+        const trenchLength = 800; // Make it very long
+
+        // Material for the wireframe - glowing green
+        const wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+        const detailMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true }); // Cyan color for details
+
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(trenchWidth, trenchLength);
+        const floor = new THREE.Mesh(floorGeometry, wireframeMaterial);
+        floor.rotation.x = Math.PI / 2; // Rotate to be horizontal
+        floor.position.y = -trenchHeight / 2; // Position below the center
+        floor.position.z = -trenchLength / 2; // Start the trench in front of the camera
+        scene.add(floor);
+
+        // Left Wall
+        const leftWallGeometry = new THREE.PlaneGeometry(trenchLength, trenchHeight);
+        const leftWall = new THREE.Mesh(leftWallGeometry, wireframeMaterial);
+        leftWall.rotation.y = Math.PI / 2; // Rotate to be vertical
+        leftWall.position.x = -trenchWidth / 2; // Position to the left
+        leftWall.position.z = -trenchLength / 2; // Align with the floor
+        scene.add(leftWall);
+
+        // Right Wall
+        const rightWallGeometry = new THREE.PlaneGeometry(trenchLength, trenchHeight);
+        const rightWall = new THREE.Mesh(rightWallGeometry, wireframeMaterial);
+        rightWall.rotation.y = -Math.PI / 2; // Rotate to be vertical
+        rightWall.position.x = trenchWidth / 2; // Position to the right
+        rightWall.position.z = -trenchLength / 2; // Align with the floor
+        scene.add(rightWall);
+
+        // Ceiling
+        const ceilingGeometry = new THREE.PlaneGeometry(trenchWidth, trenchLength);
+        const ceiling = new THREE.Mesh(ceilingGeometry, wireframeMaterial);
+        ceiling.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+        ceiling.position.y = trenchHeight / 2; // Position above the center
+        ceiling.position.z = -trenchLength / 2; // Align with the floor
+        scene.add(ceiling);
+
+        // --- Add simple wireframe details ---
+        const segmentLength = 20; // Length of each repeating trench segment
+        const numSegments = trenchLength / segmentLength;
+
+        for (let i = 0; i < numSegments; i++) {
+            const zPos = -trenchLength / 2 + i * segmentLength;
+
+            // Add simple box details on the walls
+            const sideDetailGeometry = new THREE.BoxGeometry(1, trenchHeight, 1);
+
+            const leftDetail = new THREE.Mesh(sideDetailGeometry, detailMaterial);
+            leftDetail.position.set(-trenchWidth / 2 + 0.5, 0, zPos + segmentLength / 2);
+            scene.add(leftDetail);
+
+            const rightDetail = new THREE.Mesh(sideDetailGeometry, detailMaterial);
+            rightDetail.position.set(trenchWidth / 2 - 0.5, 0, zPos + segmentLength / 2);
+            scene.add(rightDetail);
+
+            // Add crossbeams on the ceiling
+            const crossbeamGeometry = new THREE.BoxGeometry(trenchWidth, 0.5, 0.5);
+            const crossbeam = new THREE.Mesh(crossbeamGeometry, detailMaterial);
+            crossbeam.position.set(0, trenchHeight / 2 - 0.25, zPos + segmentLength / 2);
+            scene.add(crossbeam);
+        }
+
+        // --- Create the X-Wing (Player) ---
+        const xwingColor = new THREE.Color(0x00ffff); // Cyan color for X-Wing
+        const xwingMaterial = new THREE.MeshBasicMaterial({ color: xwingColor, wireframe: true });
+
+        // Simple X-Wing geometry (can be refined later)
+        xwing = new THREE.Group(); // Use a group to hold different parts
+
+        // Body
+        const bodyGeometry = new THREE.BoxGeometry(0.5, 0.5, 2);
+        const body = new THREE.Mesh(bodyGeometry, xwingMaterial);
+        xwing.add(body);
+
+        // Wings (simplified)
+        const wingGeometry = new THREE.BoxGeometry(2, 0.2, 1);
+        const topWing = new THREE.Mesh(wingGeometry, xwingMaterial);
+        topWing.position.y = 0.3;
+        xwing.add(topWing);
+
+        const bottomWing = new THREE.Mesh(wingGeometry, xwingMaterial);
+        bottomWing.position.y = -0.3;
+        xwing.add(bottomWing);
+
+        // Position the X-Wing relative to the camera
+        // We'll keep the X-Wing at a fixed position in the camera's view and move the camera
+        xwing.position.set(0, 0, -2); // Position slightly in front of the camera
+
+        scene.add(xwing); // Add X-Wing directly to the scene, not camera
+
+        // --- Player Controls ---
+        const keys = {};
+        document.addEventListener('keydown', (event) => {
+            keys[event.key] = true;
+        });
+        document.addEventListener('keyup', (event) => {
+            keys[event.key] = false;
+        });
+
+        const playerSpeed = 5; // Speed of player movement
+
+        // --- ASCII Effect Setup ---
+        // Use a standard WebGLRenderer internally for the effect
+        renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // ASCII Effect - Use a simple character set for a more blocky feel
+        const asciiChars = ' .:-+*=%@#'; // Simple character set
+        effect = new AsciiEffect(renderer, asciiChars, { invert: true, resolution: 0.1 }); // Adjusted resolution
+        effect.setSize(window.innerWidth, window.innerHeight);
+        effect.domElement.style.color = 'lightgreen'; // Set the text color
+        effect.domElement.style.backgroundColor = '#000'; // Set the background color
+        // Append the effect's DOM element to the dedicated container
+        document.getElementById('ascii-container').appendChild(effect.domElement);
+
+        // Call onWindowResize immediately after setting up the effect to ensure correct initial sizing
+        onWindowResize();
+
+        // Handle window resizing for the effect
+        window.addEventListener('resize', onWindowResize);
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            effect.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+        const trenchSpeed = 15; // Speed of trench movement
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta(); // Time elapsed since last frame
+
+            // Move the camera forward to simulate flying through the trench
+            camera.position.z -= trenchSpeed * delta;
+
+            // --- Handle Player Movement ---
+            // Update X-Wing position based on input
+            if (keys['ArrowLeft'] || keys['a']) {
+                xwing.position.x -= playerSpeed * delta;
+            }
+            if (keys['ArrowRight'] || keys['d']) {
+                xwing.position.x += playerSpeed * delta;
+            }
+            if (keys['ArrowUp'] || keys['w']) {
+                xwing.position.y += playerSpeed * delta;
+            }
+            if (keys['ArrowDown'] || keys['s']) {
+                xwing.position.y -= playerSpeed * delta;
+            }
+
+            // Clamp player position within trench boundaries
+            const halfTrenchWidth = trenchWidth / 2 - 0.5; // Subtract half of detail width
+            const halfTrenchHeight = trenchHeight / 2 - 0.5; // Subtract half of wing height
+
+            xwing.position.x = Math.max(-halfTrenchWidth, Math.min(halfTrenchWidth, xwing.position.x));
+            xwing.position.y = Math.max(-halfTrenchHeight, Math.min(halfTrenchHeight, xwing.position.y));
+
+
+            // Render the scene using the AsciiEffect
+            effect.render(scene, camera);
+        }
+
+        // Start the animation loop
+        animate();
+
+    </script>
+</body>
+</html>

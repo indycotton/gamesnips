@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kal-toh 3D: Dodecahedron Chaos (Clean Open-Ended Rods)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            overflow: hidden;
+        }
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        canvas { display: block; }
+        .ui-overlay { /* Styles for the UI overlay */ 
+            position: absolute; top: 0; left: 0; width: 100%; padding: 1rem; z-index: 10; pointer-events: none;
+        }
+        .ui-content { /* Styles for the UI content box */ 
+            background-color: rgba(31, 41, 55, 0.85); padding: 1.5rem; border-radius: 0.5rem; 
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); 
+            max-width: 600px; margin: 0 auto; pointer-events: auto;
+        }
+        .btn { /* Styles for buttons */ 
+            transition: background-color 0.3s ease, transform 0.1s ease; pointer-events: auto;
+        }
+        .btn:hover { filter: brightness(1.1); }
+        .btn:active { transform: scale(0.98); }
+        /* Player and message text styles */
+        .player1-text { color: #4ade80; }
+        .player2-text { color: #818cf8; }
+        .target-revealed-text { color: #facc15; } 
+        .info-text { color: #38bdf8; } 
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+    <div id="gameContainer"></div>
+
+    <div class="ui-overlay">
+        <div class="ui-content">
+            <header class="text-center mb-4">
+                <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-sky-400">Kal-toh: Dodecahedron Chaos</h1>
+                <p class="text-sm text-gray-400">Remove junk rods to reveal the hidden Dodecahedron. Press Space to reveal.</p>
+            </header>
+            <div class="flex justify-between items-center mb-3">
+                <div id="player1Score" class="text-md"><span class="font-semibold player1-text">Player 1:</span> 0 junk removed</div>
+                <div id="player2Score" class="text-md"><span class="font-semibold player2-text">Player 2:</span> 0 junk removed</div>
+            </div>
+            <div id="statusMessage" class="text-center text-lg font-semibold mb-3 h-7">Player 1's Turn</div>
+            <div class="text-center">
+                <button id="resetButton" class="btn bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md text-sm">
+                    Reset Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Helper Functions (MOVED TO VERY TOP) ---
+        function getVertexKey(v) {
+            return `${v.x.toFixed(3)}_${v.y.toFixed(3)}_${v.z.toFixed(3)}`;
+        }
+
+        function addOrGetUniqueVertex(p, collection) {
+            const key = getVertexKey(p);
+            if (!collection.has(key)) {
+                collection.set(key, p.clone()); 
+            }
+            return collection.get(key);
+        }
+
+        // --- Three.js Scene Setup ---
+        let scene, camera, renderer, controls;
+        let raycaster, mouse;
+        const gameContainer = document.getElementById('gameContainer');
+        let composer, staticPass; // For post-processing
+
+        // --- Game Constants and Variables ---
+        const PLAYER_ONE = 1;
+        const PLAYER_TWO = 2;
+        const INITIAL_ROD_COLOR = 0x6B7280; 
+        const INITIAL_ROD_EMISSIVE = 0x374151; 
+        const INITIAL_ROD_OPACITY = 0.75;
+        const TARGET_REVEALED_COLOR = 0xfacc15; 
+        const TARGET_REVEALED_EMISSIVE = 0xb45309; 
+        const ROD_RADIUS = 0.035; 
+        const ROD_RADIAL_SEGMENTS = 6; 
+        // const VERTEX_SPHERE_RADIUS = ROD_RADIUS * 1.5; // No longer needed
+        const EPSILON = 0.01; 
+
+        let rods = []; 
+        // let uniqueVerticesGlobal = new Map(); // No longer strictly needed for drawing spheres, but can be kept if useful for other vertex logic
+
+        let currentPlayer;
+        let playerScore; 
+        let gameState; 
+
+        // --- Glitch Effect Variables (Star Wars Style) ---
+        let activeGlitches = [];
+        const GLITCH_PROBABILITY = 0.03; 
+        const MAX_CONCURRENT_GLITCHES = 4; 
+        const GLITCH_DURATION_MS = 120; 
+        const GLITCH_DISPLACEMENT_MAX = 0.06; 
+        const GLITCH_EMISSIVE_COLOR = 0x00BFFF; 
+        const GLITCH_EMISSIVE_INTENSITY = 1.8; 
+        const GLITCH_OPACITY_MIN = 0.1;    
+        const GLITCH_OPACITY_MAX = 0.85;   
+        const GLITCH_SCALE_FACTOR_MIN = 0.95; 
+        const GLITCH_SCALE_FACTOR_MAX = 1.05; 
+
+        // --- Static Distortion Effect Variables ---
+        let staticEffectActiveUntil = 0; 
+        const STATIC_LINGER_DURATION_MS = 250; 
+        const STATIC_INTENSITY = 0.35; 
+        const STATIC_SPEED = 0.15; 
+
+        // --- De-rez Effect Variables ---
+        let activeDerezEffects = [];
+        const DEREZ_DURATION_MS = 200; 
+        const DEREZ_EMISSIVE_COLOR = 0x00FFFF; 
+        const DEREZ_EMISSIVE_INTENSITY = 2.0;
+        const DEREZ_TARGET_SCALE_Y = 0.001; 
+        
+        // --- UI Elements ---
+        const player1ScoreDisplay = document.getElementById('player1Score');
+        const player2ScoreDisplay = document.getElementById('player2Score');
+        const statusMessageDisplay = document.getElementById('statusMessage');
+        const resetButton = document.getElementById('resetButton');
+
+        // --- Static Shader Definition ---
+        const StaticShader = {
+            uniforms: {
+                'tDiffuse': { value: null },
+                'u_time': { value: 0.0 },
+                'u_amount': { value: STATIC_INTENSITY }, 
+                'u_speed': { value: STATIC_SPEED }    
+            },
+            vertexShader: /*glsl*/`
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: /*glsl*/`
+                uniform sampler2D tDiffuse;
+                uniform float u_time;
+                uniform float u_amount;
+                uniform float u_speed;
+                varying vec2 vUv;
+
+                float random(vec2 st) {
+                    return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+                }
+
+                void main() {
+                    vec4 originalColor = texture2D(tDiffuse, vUv);
+                    float noise = random(vUv * u_time * u_speed + random(vUv)); 
+                    float scanlineIntensity = 0.08; 
+                    float scanline = sin(vUv.y * 350.0 + u_time * 25.0 * u_speed) * scanlineIntensity + (1.0 - scanlineIntensity);
+                    vec3 staticColor = vec3(noise * 0.5, noise * 0.7, noise * 0.9) * scanline; 
+                    gl_FragColor = vec4(mix(originalColor.rgb, staticColor, u_amount * (noise * 0.8 + 0.2)), originalColor.a);
+                }
+            `
+        };
+
+        // --- Initialization ---
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827); 
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(3.2, 3.2, 5.0); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            gameContainer.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement); 
+            controls.enableDamping = true;
+            controls.minDistance = 0.8; 
+            controls.maxDistance = 23; 
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); directionalLight.position.set(5,10,7.5); scene.add(directionalLight);
+
+            raycaster = new THREE.Raycaster(); mouse = new THREE.Vector2();
+
+            composer = new THREE.EffectComposer(renderer);
+            const renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            staticPass = new THREE.ShaderPass(StaticShader);
+            staticPass.enabled = false; 
+            composer.addPass(staticPass);
+
+            window.addEventListener('resize', onWindowResize, false);
+            gameContainer.addEventListener('click', onCanvasClick, false);
+            window.addEventListener('keydown', onSpaceBarPress, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight); 
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            
+            const now = Date.now();
+            if (gameState === 'playing') {
+                handleGlitches(now);
+                handleDerezEffects(now);
+
+                if (now < staticEffectActiveUntil) {
+                    staticPass.enabled = true;
+                    staticPass.uniforms.u_time.value = now * 0.001; 
+                } else {
+                    staticPass.enabled = false;
+                }
+            } else {
+                staticPass.enabled = false; 
+            }
+            composer.render(); 
+        }
+
+        // --- Glitch Handling (Star Wars Style) ---
+        function handleGlitches(now) {
+            activeGlitches = activeGlitches.filter(glitch => { 
+                if (now >= glitch.endTime) {
+                    if (glitch.mesh && glitch.mesh.material && glitch.mesh.visible) { 
+                        glitch.mesh.position.copy(glitch.originalPosition);
+                        glitch.mesh.scale.copy(glitch.originalScale); 
+                        glitch.mesh.material.emissive.setHex(glitch.originalEmissive);
+                        glitch.mesh.material.opacity = glitch.originalOpacity;
+                        glitch.mesh.material.emissiveIntensity = glitch.originalEmissiveIntensity;
+                        glitch.mesh.material.needsUpdate = true;
+                    }
+                    return false; 
+                }
+                if (glitch.mesh && glitch.mesh.material && glitch.mesh.visible) {
+                     glitch.mesh.material.opacity = GLITCH_OPACITY_MIN + Math.random() * (GLITCH_OPACITY_MAX - GLITCH_OPACITY_MIN);
+                     glitch.mesh.position.x = glitch.originalPosition.x + (Math.random() - 0.5) * 0.02;
+                     glitch.mesh.position.y = glitch.originalPosition.y + (Math.random() - 0.5) * 0.02;
+                }
+                return true; 
+            });
+
+            if (activeGlitches.length < MAX_CONCURRENT_GLITCHES && Math.random() < GLITCH_PROBABILITY) {
+                const availableRods = rods.filter(rod =>  
+                    !rod.isTargetRod && !rod.isRemoved && rod.mesh && rod.mesh.visible && 
+                    !activeGlitches.some(ag => ag.mesh === rod.mesh) &&
+                    !activeDerezEffects.some(de => de.mesh === rod.mesh) 
+                );
+
+                if (availableRods.length > 0) {
+                    const rodToGlitch = availableRods[Math.floor(Math.random() * availableRods.length)];
+                    const mesh = rodToGlitch.mesh;
+                    if (mesh && mesh.material) { 
+                        activeGlitches.push({ 
+                            mesh: mesh, originalPosition: mesh.position.clone(), originalScale: mesh.scale.clone(), 
+                            originalEmissive: mesh.material.emissive.getHex(), originalOpacity: mesh.material.opacity,
+                            originalEmissiveIntensity: mesh.material.emissiveIntensity, endTime: now + GLITCH_DURATION_MS
+                        });
+                        mesh.position.x += (Math.random() - 0.5) * 2 * GLITCH_DISPLACEMENT_MAX;
+                        mesh.position.y += (Math.random() - 0.5) * 2 * GLITCH_DISPLACEMENT_MAX;
+                        mesh.position.z += (Math.random() - 0.5) * 2 * GLITCH_DISPLACEMENT_MAX;
+                        const scaleF = GLITCH_SCALE_FACTOR_MIN + Math.random() * (GLITCH_SCALE_FACTOR_MAX - GLITCH_SCALE_FACTOR_MIN);
+                        mesh.scale.set(scaleF, scaleF, scaleF);
+                        mesh.material.emissive.setHex(GLITCH_EMISSIVE_COLOR);
+                        mesh.material.emissiveIntensity = GLITCH_EMISSIVE_INTENSITY;
+                        mesh.material.opacity = GLITCH_OPACITY_MIN + Math.random() * (GLITCH_OPACITY_MAX - GLITCH_OPACITY_MIN);
+                        mesh.material.needsUpdate = true;
+                        staticEffectActiveUntil = now + GLITCH_DURATION_MS + STATIC_LINGER_DURATION_MS;
+                    }
+                }
+            }
+        }
+
+        // --- De-rez Effect Handling ---
+        function handleDerezEffects(now) { 
+            activeDerezEffects = activeDerezEffects.filter(effect => {
+                const elapsedTime = now - effect.startTime;
+                const progress = Math.min(elapsedTime / DEREZ_DURATION_MS, 1);
+                if (effect.mesh && effect.mesh.material) {
+                    effect.mesh.scale.y = THREE.MathUtils.lerp(effect.originalScaleY, DEREZ_TARGET_SCALE_Y, progress);
+                    if (progress >= 1) {
+                        effect.mesh.visible = false;
+                        const rodData = rods.find(r => r.mesh === effect.mesh);
+                        if (rodData) rodData.isRemoved = true;
+                        effect.mesh.material.emissive.setHex(effect.originalEmissive);
+                        effect.mesh.material.emissiveIntensity = effect.originalEmissiveIntensity;
+                        effect.mesh.material.opacity = effect.originalOpacity;
+                        effect.mesh.scale.y = effect.originalScaleY; 
+                        effect.mesh.material.needsUpdate = true;
+                        if (checkWinCondition()) {
+                            endGame(true, false);
+                        }
+                        return false; 
+                    }
+                } else { return false; }
+                return true; 
+            });
+        }
+
+        // --- Game Structure Definition ---
+        function defineRodsAndChaos() { 
+            activeGlitches.forEach(g => { if(g.mesh && g.mesh.material){ g.mesh.position.copy(g.originalPosition); g.mesh.scale.copy(g.originalScale); g.mesh.material.emissive.setHex(g.originalEmissive); g.mesh.material.opacity=g.originalOpacity; g.mesh.material.emissiveIntensity=g.originalEmissiveIntensity; g.mesh.material.needsUpdate=true; }});
+            activeGlitches = [];
+            activeDerezEffects.forEach(e => { if(e.mesh) e.mesh.visible = false; const rd = rods.find(r=>r.mesh===e.mesh); if(rd) rd.isRemoved = true; });
+            activeDerezEffects = []; 
+            staticEffectActiveUntil = 0; 
+
+            rods.forEach(rod => { if (rod.mesh) scene.remove(rod.mesh); });
+            rods = []; 
+            // uniqueVerticesGlobal.clear(); // Clearing if it was used for spheres
+            
+            const objectsToRemove = [];
+            scene.traverse(child => { if (child.userData.isRod || child.userData.isVertexSphere) objectsToRemove.push(child); }); // Also remove old spheres if any
+            objectsToRemove.forEach(child => { scene.remove(child); if(child.geometry)child.geometry.dispose(); if(child.material)child.material.dispose(); });
+            
+            let idCounter = 0; const TARGET_SHAPE_RADIUS = 1.9; 
+            const dodecaGeometry = new THREE.DodecahedronGeometry(TARGET_SHAPE_RADIUS, 0);
+            const edgesGeom = new THREE.EdgesGeometry(dodecaGeometry, 0.1); 
+            const edgePositions = edgesGeom.attributes.position;
+            for (let i = 0; i < edgePositions.count; i += 2) {
+                const v1 = new THREE.Vector3().fromBufferAttribute(edgePositions, i);
+                const v2 = new THREE.Vector3().fromBufferAttribute(edgePositions, i + 1);
+                // const uniqueP1 = addOrGetUniqueVertex(v1, uniqueVerticesGlobal); // Not strictly needed if not drawing spheres
+                // const uniqueP2 = addOrGetUniqueVertex(v2, uniqueVerticesGlobal);
+                const rodMesh = createRodMesh(v1, v2, INITIAL_ROD_COLOR, INITIAL_ROD_EMISSIVE, INITIAL_ROD_OPACITY); // Use v1, v2 directly
+                if (rodMesh) { rodMesh.userData = { id:idCounter, isTargetRod:true, isRod:true }; scene.add(rodMesh); rods.push({ id:idCounter++, mesh:rodMesh, p1:v1, p2:v2, vertices:[v1,v2], isTargetRod:true, isRemoved:false }); }
+            }
+            const numDenseJunkRods = 1500; const chaosBounds = TARGET_SHAPE_RADIUS * 0.85; 
+            const minRodLength = TARGET_SHAPE_RADIUS * 0.18; const maxRodLength = TARGET_SHAPE_RADIUS * 0.55; 
+            for(let i=0; i < numDenseJunkRods; i++) {
+                const p1 = new THREE.Vector3((Math.random()-0.5)*2*chaosBounds, (Math.random()-0.5)*2*chaosBounds, (Math.random()-0.5)*2*chaosBounds);
+                const randomLength = Math.random()*(maxRodLength-minRodLength)+minRodLength;
+                const randomDirection = new THREE.Vector3((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5)).normalize();
+                const p2 = new THREE.Vector3().addVectors(p1, randomDirection.multiplyScalar(randomLength));
+                if (p1.distanceTo(p2) < minRodLength*0.8) continue; 
+                // const uniqueP1Junk = addOrGetUniqueVertex(p1, uniqueVerticesGlobal); 
+                // const uniqueP2Junk = addOrGetUniqueVertex(p2, uniqueVerticesGlobal);
+                const rodMesh = createRodMesh(p1, p2, INITIAL_ROD_COLOR, INITIAL_ROD_EMISSIVE, INITIAL_ROD_OPACITY); // Use p1, p2 directly
+                 if (rodMesh) { rodMesh.userData = { id:idCounter, isTargetRod:false, isRod:true }; scene.add(rodMesh); rods.push({ id:idCounter++, mesh:rodMesh, p1:p1, p2:p2, vertices:[p1,p2], isTargetRod:false, isRemoved:false }); }
+            }
+            
+            // REMOVED: Vertex sphere creation loop
+            // uniqueVerticesGlobal.forEach(vertex => { ... }); 
+
+            edgesGeom.dispose(); dodecaGeometry.dispose(); 
+        }
+
+        function createRodMesh(p1, p2, color, emissiveColor, opacity) { 
+            const direction = new THREE.Vector3().subVectors(p2, p1); const length = direction.length(); if (length < EPSILON) return null; 
+            const geometry = new THREE.CylinderGeometry(ROD_RADIUS, ROD_RADIUS, length, ROD_RADIAL_SEGMENTS, 1, true); 
+            geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI/2)); 
+            const material = new THREE.MeshStandardMaterial({ 
+                color:color, 
+                metalness:0.3, 
+                roughness:0.7, 
+                transparent:opacity<1.0, 
+                opacity:opacity, 
+                emissive:emissiveColor, 
+                emissiveIntensity:(opacity<1.0 && emissiveColor===INITIAL_ROD_EMISSIVE)?0.6:1.0,
+                side: THREE.DoubleSide 
+            });
+            const mesh = new THREE.Mesh(geometry, material); mesh.position.copy(p1).add(direction.clone().multiplyScalar(0.5));
+            const up = new THREE.Vector3(0,1,0); if (Math.abs(direction.clone().normalize().dot(up)) > 0.999) up.set(1,0,0); 
+            mesh.lookAt(p2); return mesh;
+        }
+
+        // --- Game Logic ---
+        function initializeGame() { defineRodsAndChaos(); currentPlayer=PLAYER_ONE; playerScore={[PLAYER_ONE]:0,[PLAYER_TWO]:0}; gameState='playing'; updateUI(); }
+        
+        function onCanvasClick(event) { 
+            if (gameState !== 'playing') return;
+            mouse.x = (event.clientX/window.innerWidth)*2-1; mouse.y = -(event.clientY/window.innerHeight)*2+1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersectableMeshes = rods.filter(r=>r.mesh && r.mesh.visible && !activeDerezEffects.some(de=>de.mesh===r.mesh)).map(r=>r.mesh);
+            const intersects = raycaster.intersectObjects(intersectableMeshes, false);
+            if (intersects.length > 0) { 
+                const clickedMesh = intersects[0].object; const rodData = rods.find(r => r.mesh === clickedMesh);
+                if (rodData && !rodData.isRemoved && !activeDerezEffects.some(de=>de.mesh===rodData.mesh)) { 
+                    if (rodData.isTargetRod) { flashMessage("Cannot remove a target Dodecahedron rod!"); } 
+                    else {
+                        if (rodData.mesh && rodData.mesh.material) {
+                            const existingGlitchIndex = activeGlitches.findIndex(g=>g.mesh===rodData.mesh);
+                            if (existingGlitchIndex !== -1) { const g=activeGlitches[existingGlitchIndex]; g.mesh.position.copy(g.originalPosition); g.mesh.scale.copy(g.originalScale); activeGlitches.splice(existingGlitchIndex,1); }
+                            activeDerezEffects.push({ mesh:rodData.mesh, startTime:Date.now(), originalScaleY:rodData.mesh.scale.y, originalEmissive:rodData.mesh.material.emissive.getHex(), originalOpacity:rodData.mesh.material.opacity, originalEmissiveIntensity:rodData.mesh.material.emissiveIntensity });
+                            rodData.mesh.material.emissive.setHex(DEREZ_EMISSIVE_COLOR); rodData.mesh.material.emissiveIntensity = DEREZ_EMISSIVE_INTENSITY; rodData.mesh.material.opacity = INITIAL_ROD_OPACITY; rodData.mesh.material.needsUpdate = true;
+                        }
+                        playerScore[currentPlayer]++; updateUI(); 
+                        
+                        if (!checkWinCondition()) { 
+                            const allRemainingJunkIsDerezzing = rods.filter(r => !r.isTargetRod && !r.isRemoved)
+                                                                  .every(r => activeDerezEffects.some(de => de.mesh === r.mesh));
+                            if (!allRemainingJunkIsDerezzing) {
+                                switchPlayer();
+                            }
+                        } 
+                    }
+                }
+            }
+        }
+        function checkAllJunkDerezzingOrRemoved() { return rods.every(rod=>rod.isTargetRod || rod.isRemoved || activeDerezEffects.some(de=>de.mesh===rod.mesh)); }
+        function onSpaceBarPress(event) { if(event.code==='Space' && gameState==='playing'){ event.preventDefault(); endGame(false,true); }}
+        function checkWinCondition() { const junk=rods.filter(r=>!r.isTargetRod); if(junk.length===0 && rods.some(r=>r.isTargetRod))return false; return junk.every(r=>r.isRemoved); }
+        function switchPlayer() { currentPlayer=(currentPlayer===PLAYER_ONE)?PLAYER_TWO:PLAYER_ONE; updateUI(); }
+        function endGame(isWinByPlay, isUserReveal) { 
+            gameState = 'gameOver'; 
+            if (staticPass) staticPass.enabled = false; 
+            staticEffectActiveUntil = 0;
+            activeGlitches.forEach(g => { if(g.mesh && g.mesh.material){ g.mesh.position.copy(g.originalPosition); g.mesh.scale.copy(g.originalScale); g.mesh.material.emissive.setHex(g.originalEmissive); g.mesh.material.opacity=g.originalOpacity; g.mesh.material.emissiveIntensity=g.originalEmissiveIntensity; g.mesh.material.needsUpdate=true; }}); activeGlitches = [];
+            activeDerezEffects.forEach(e => { if(e.mesh)e.mesh.visible=false; const rd=rods.find(r=>r.mesh===e.mesh); if(rd)rd.isRemoved=true; }); activeDerezEffects = [];
+            if(isWinByPlay) { statusMessageDisplay.textContent="Dodecahedron Revealed! Kal-toh!"; statusMessageDisplay.className='text-center text-lg font-semibold mb-3 h-7 target-revealed-text'; }
+            else if(isUserReveal) { statusMessageDisplay.textContent="Dodecahedron Revealed by User!"; statusMessageDisplay.className='text-center text-lg font-semibold mb-3 h-7 info-text'; }
+            else { statusMessageDisplay.textContent="Game Over. Try again!"; }
+            rods.forEach(rod => { if (rod.mesh) { if (rod.isTargetRod) { rod.mesh.visible=true; rod.mesh.material.color.setHex(TARGET_REVEALED_COLOR); rod.mesh.material.emissive.setHex(TARGET_REVEALED_EMISSIVE); rod.mesh.material.emissiveIntensity=0.8; rod.mesh.material.transparent=false; rod.mesh.material.opacity=1.0; } else { rod.mesh.visible=false; } rod.mesh.material.needsUpdate=true; } });
+            
+            // No longer highlighting vertex spheres as they are removed
+            // uniqueVerticesGlobal.forEach((vertex, key) => { ... });
+
+        }
+        function updateUI() { 
+            player1ScoreDisplay.innerHTML=`<span class="font-semibold player1-text">Player 1:</span> ${playerScore[PLAYER_ONE]} junk removed`; player2ScoreDisplay.innerHTML=`<span class="font-semibold player2-text">Player 2:</span> ${playerScore[PLAYER_TWO]} junk removed`;
+            if(gameState==='playing'){ statusMessageDisplay.textContent=`Player ${currentPlayer}'s Turn`; statusMessageDisplay.className=`text-center text-lg font-semibold mb-3 h-7 ${currentPlayer===PLAYER_ONE?'player1-text':'player2-text'}`; }
+        }
+        let messageTimeout; function flashMessage(message, isError=true) { 
+            const oT=statusMessageDisplay.textContent; const oC=statusMessageDisplay.className; statusMessageDisplay.textContent=message; if(isError)statusMessageDisplay.className='text-center text-lg font-semibold mb-3 h-7 text-red-400'; else statusMessageDisplay.className='text-center text-lg font-semibold mb-3 h-7 text-sky-400';
+            clearTimeout(messageTimeout); messageTimeout=setTimeout(()=>{if(gameState==='playing')updateUI();},1500);
+        }
+        resetButton.addEventListener('click', ()=>{initializeGame();});
+        window.onload = ()=>{initThreeJS(); initializeGame(); animate();};
+    </script>
+</body>
+</html>
